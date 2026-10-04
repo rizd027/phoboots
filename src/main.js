@@ -145,7 +145,7 @@ const nameField = () => `
    ========================================================= */
 function homeView() {
   return `
-  <div class="ribbon">${t('footer')}</div>
+  <div class="ribbon">${t('footer')} · ${t('createdBy')} <b>rizddf</b></div>
   <header class="nav container">
     ${logo()}
     <nav class="nav-links">
@@ -220,7 +220,10 @@ function homeView() {
 
   <footer class="footer container">
     ${logo()}
-    <span>© ${new Date().getFullYear()} · ${t('footer')}</span>
+    <div class="footer-meta">
+      <span>© ${new Date().getFullYear()} <b>PhoBoots</b> · ${t('createdBy')} <a href="https://github.com/rizddf" target="_blank" rel="noopener noreferrer" class="footer-author">rizddf</a></span>
+      <span class="footer-sub">${t('footer')}</span>
+    </div>
   </footer>`;
 }
 
