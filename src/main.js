@@ -305,7 +305,10 @@ function lobbyView() {
       <div class="status"><span class="pulse"></span><span id="lobby-status"></span></div>
     </div>
     <div class="stage lobby-stage" id="stage"></div>
-    <div class="lobby-actions" id="lobby-actions"></div>
+    <div class="lobby-actions" id="lobby-actions">
+      <button class="btn primary big" data-action="start-session" id="btn-start-session">${ic.play}${t('aloneInstead')}</button>
+      <button class="btn-leave-box" data-action="leave" id="btn-leave">${ic.x}<span>${t('leave')}</span></button>
+    </div>
   </main>`;
 }
 
@@ -793,9 +796,9 @@ function updateLobby() {
   if (actions) {
     actions.innerHTML = S.room.isHost
       ? `<button class="btn primary big" data-action="start-session" id="btn-start-session">${ic.play}${n > 1 ? t('startSession') : t('aloneInstead')}</button>
-         <button class="link-btn" data-action="leave" id="btn-leave">${t('leave')}</button>`
+         <button class="btn-leave-box" data-action="leave" id="btn-leave">${ic.x}<span>${t('leave')}</span></button>`
       : `<p class="sub"><span class="spinner sm"></span> ${t('waitingHost')}</p>
-         <button class="link-btn" data-action="leave" id="btn-leave">${t('leave')}</button>`;
+         <button class="btn-leave-box" data-action="leave" id="btn-leave">${ic.x}<span>${t('leave')}</span></button>`;
   }
   renderStage();
 }

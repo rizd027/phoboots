@@ -1173,15 +1173,53 @@ body[data-theme='neon'] .tile {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  margin-top: 2px;
+  gap: 8px;
+  margin-top: 4px;
 }
 .lobby-actions .btn {
-  height: 42px;
+  height: 44px;
   padding: 10px 28px;
   font-size: 14px;
+  font-weight: 600;
   border-radius: 999px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+.btn-leave-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 22px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.btn-leave-box:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.12);
+}
+.btn-leave-box:active {
+  transform: scale(0.97);
+}
+.btn-leave-box svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .lobby-actions .link-btn {
   font-size: 13px;
@@ -1210,9 +1248,9 @@ body[data-theme='neon'] .tile {
   display: grid !important;
   grid-template-columns: repeat(4, 1fr) !important;
   width: 100% !important;
-  max-width: 480px !important;
-  margin: 2px auto 0 !important;
-  gap: 8px !important;
+  max-width: 520px !important;
+  margin: 4px auto 0 !important;
+  gap: 10px !important;
 }
 .lobby-stage .tile-v {
   position: relative;
@@ -1222,7 +1260,7 @@ body[data-theme='neon'] .tile {
   background: #18181f;
   display: grid;
   place-items: center;
-  max-height: 90px;
+  max-height: 105px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -1233,9 +1271,12 @@ body[data-theme='neon'] .tile {
   box-shadow: none;
 }
 .lobby-stage .tile-v.empty svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   opacity: 0.6;
+}
+.lobby-stage .tile-v.me {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), 0 0 0 2px rgba(255, 255, 255, 0.22);
 }
 .lobby-stage .tile-name {
   position: absolute;
@@ -3232,19 +3273,32 @@ body[data-theme='neon'] .lay-art {
   }
   .stage.lobby-stage,
   .stage.lobby-stage[data-count] {
-    grid-template-columns: repeat(4, 1fr) !important;
-    gap: 6px !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
     width: 100% !important;
-    max-width: 340px !important;
+    max-width: 310px !important;
+    margin: 2px auto 0 !important;
   }
   .lobby-stage .tile-v {
-    max-height: 68px;
-    border-radius: 8px;
+    aspect-ratio: 16 / 11;
+    max-height: 96px;
+    border-radius: 12px;
+  }
+  .lobby-stage .tile-name {
+    font-size: 10px;
+    padding: 3px 8px;
+    left: 6px;
+    bottom: 6px;
+  }
+  .lobby-stage .tile-v.empty svg {
+    width: 20px;
+    height: 20px;
+    opacity: 0.6;
   }
   .lobby-actions {
     width: 100%;
-    max-width: 280px;
-    gap: 4px;
+    max-width: 310px;
+    gap: 6px;
     margin-top: 2px;
   }
   .lobby-actions .btn {
@@ -3254,9 +3308,35 @@ body[data-theme='neon'] .lay-art {
     padding: 8px 16px;
     justify-content: center;
   }
+  .lobby-actions .btn-leave-box {
+    padding: 6px 18px;
+    font-size: 12px;
+  }
   .lobby-actions .link-btn {
     font-size: 12px;
     padding: 2px 6px;
+  }
+  @media (max-height: 650px) {
+    .center-view.lobby {
+      padding: 8px 12px 8px;
+      gap: 5px;
+    }
+    .center-view.lobby .code-card {
+      padding: 6px 12px 6px;
+      gap: 6px;
+    }
+    .center-view.lobby .tile {
+      width: 34px;
+      height: 42px;
+      font-size: 20px;
+    }
+    .lobby-stage .tile-v {
+      max-height: 76px;
+    }
+    .lobby-actions .btn {
+      height: 36px;
+      font-size: 13px;
+    }
   }
 
   /* Frame Picker View (Single Screen, Zero Scroll on Mobile) */
