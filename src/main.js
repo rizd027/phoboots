@@ -1685,6 +1685,14 @@ app.addEventListener('keydown', (e) => {
   }
 });
 
+app.addEventListener('wheel', (e) => {
+  const grid = e.target.closest('.frame-cards-grid');
+  if (grid && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+    grid.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }
+}, { passive: false });
+
 app.addEventListener('paste', (e) => {
   const el = e.target;
   if (!el.classList?.contains('code-box')) return;
