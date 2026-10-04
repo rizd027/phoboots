@@ -1172,6 +1172,12 @@ body[data-theme='neon'] .tile {
   animation: none;
   box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
 }
+.status.warn .pulse {
+  background: #f59e0b;
+  border-color: #f59e0b;
+  animation: blink 0.8s infinite;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.25);
+}
 .lobby-actions {
   display: flex;
   flex-direction: column;

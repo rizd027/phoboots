@@ -1296,6 +1296,20 @@ function attachRoom(room) {
     leave();
   });
   room.on('net-error', () => toast(t('netError')));
+  room.on('status', (st) => {
+    if (S.view === 'lobby') {
+      const status = document.getElementById('lobby-status');
+      const statusWrap = document.querySelector('.status');
+      if (st === 'reconnecting') {
+        if (status) status.textContent = t('reconnecting');
+        statusWrap?.classList.remove('ok');
+        statusWrap?.classList.add('warn');
+      } else if (st === 'ready') {
+        statusWrap?.classList.remove('warn');
+        updateLobby();
+      }
+    }
+  });
 }
 
 function onState() {
@@ -1886,9 +1900,16 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     if (['lobby', 'session'].includes(S.view)) acquireWakeLock();
-    if (S.room?.peer && S.room.peer.disconnected && !S.room.peer.destroyed) {
-      console.log('[room] Reconnecting peer on tab focus...');
-      try { S.room.peer.reconnect(); } catch {}
+    if (S.room && !S.room.closed) {
+      if (S.room.isHost) {
+        if (!S.room.peer || S.room.peer.disconnected || S.room.peer.destroyed) {
+          console.log('[room] Mobile tab woke up, recovering host room...');
+          S.room._recoverHost();
+        }
+      } else if (S.room.peer && S.room.peer.disconnected && !S.room.peer.destroyed) {
+        console.log('[room] Mobile tab woke up, reconnecting guest peer...');
+        try { S.room.peer.reconnect(); } catch {}
+      }
     }
   }
 });

@@ -36,6 +36,8 @@ export class Room {
     this.streams = new Map(); // peerId -> MediaStream
     this.listeners = {};
     this.closed = false;
+    this._recovering = false;
+    this._hbTimer = null;
   }
 
   on(evt, fn) {
@@ -57,7 +59,8 @@ export class Room {
 
   _open(id) {
     return new Promise((resolve, reject) => {
-      const peer = id ? new Peer(id, { debug: 1 }) : new Peer({ debug: 1 });
+      // 3-second ping interval to keep cellular CGNAT NAT mapping active
+      const peer = id ? new Peer(id, { debug: 1, pingInterval: 3000 }) : new Peer({ debug: 1, pingInterval: 3000 });
       const onErr = (e) => {
         peer.destroy();
         reject(e);
@@ -69,14 +72,91 @@ export class Room {
         peer.on('error', (e) => this._onPeerError(e));
         peer.on('disconnected', () => {
           if (!peer.destroyed && !this.closed) {
-            try {
-              peer.reconnect();
-            } catch {}
+            if (this.isHost) {
+              this._recoverHost();
+            } else {
+              try { peer.reconnect(); } catch {}
+            }
           }
         });
         resolve(peer);
       });
     });
+  }
+
+  async _recoverHost() {
+    if (this.closed || !this.isHost || this._recovering) return;
+    this._recovering = true;
+    this.emit('status', 'reconnecting');
+    console.log('[room] Cellular connection drop detected, recovering host room:', this.code);
+
+    try {
+      if (this.peer && !this.peer.destroyed) {
+        try {
+          this.peer.reconnect();
+          await new Promise((res, rej) => {
+            const onOpen = () => { cleanup(); res(); };
+            const onErr = (e) => { cleanup(); rej(e); };
+            const cleanup = () => {
+              this.peer?.off('open', onOpen);
+              this.peer?.off('error', onErr);
+            };
+            this.peer.once('open', onOpen);
+            this.peer.once('error', onErr);
+            setTimeout(() => { cleanup(); rej(new Error('timeout')); }, 3000);
+          });
+          this._recovering = false;
+          this.emit('status', 'ready');
+          console.log('[room] Host reconnected successfully via reconnect()');
+          return;
+        } catch (err) {
+          console.warn('[room] Quick reconnect failed, re-opening clean peer:', err);
+        }
+      }
+
+      try { this.peer?.destroy(); } catch {}
+      // Give broker 1.5s to clear previous socket session so ID-TAKEN is avoided
+      await new Promise((r) => setTimeout(r, 1500));
+      if (this.closed) return;
+
+      await this._open(PREFIX + this.code);
+      this.myId = this.peer.id;
+      this.peer.on('connection', (conn) => this._onGuestConn(conn));
+      this.peer.on('call', (call) => this._answer(call));
+      this.emit('status', 'ready');
+      console.log('[room] Host room re-opened successfully with ID:', PREFIX + this.code);
+    } catch (e) {
+      console.error('[room] Host recovery error:', e);
+      if (!this.closed) {
+        setTimeout(() => {
+          this._recovering = false;
+          this._recoverHost();
+        }, 2000);
+        return;
+      }
+    }
+    this._recovering = false;
+  }
+
+  _startHeartbeat() {
+    this._stopHeartbeat();
+    this._hbTimer = setInterval(() => {
+      if (this.closed) return;
+      if (this.isHost) {
+        if (!this.peer || this.peer.disconnected || this.peer.destroyed) {
+          this._recoverHost();
+        } else if (this.conns.size > 0) {
+          this._broadcast({ type: 'hb' });
+        }
+      }
+    }, 3500);
+  }
+
+  _stopHeartbeat() {
+    if (this._hbTimer) {
+      clearInterval(this._hbTimer);
+      this._hbTimer = null;
+    }
   }
 
   async create(initialState) {
@@ -108,6 +188,8 @@ export class Room {
     this.members = [{ id: this.myId, name: this.name, idx: 0, host: true }];
     this.peer.on('connection', (conn) => this._onGuestConn(conn));
     this.peer.on('call', (call) => this._answer(call));
+    this._startHeartbeat();
+    this.emit('status', 'ready');
     return this.code;
   }
 
@@ -117,55 +199,99 @@ export class Room {
     this.myId = this.peer.id;
     this.peer.on('call', (call) => this._answer(call));
 
+    const MAX_RETRIES = 3;
+    let attempt = 0;
+
     return new Promise((resolve, reject) => {
       let settled = false;
-      let isPeerUnavailable = false;
+      let activeConn = null;
+      let retryTimer = null;
 
       const fail = (reason) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        clearTimeout(retryTimer);
         this._pendingJoinFail = null;
         this.leave();
         reject(new Error(reason));
       };
-      const timer = setTimeout(() => fail('notfound'), 20000);
-      this._pendingJoinFail = (reason) => {
-        if (reason === 'notfound') isPeerUnavailable = true;
-        fail(reason);
+      const timer = setTimeout(() => fail('notfound'), 22000);
+
+      const tryConnect = () => {
+        if (settled || this.closed) return;
+        attempt++;
+
+        if (activeConn) {
+          try { activeConn.close(); } catch {}
+          activeConn = null;
+        }
+
+        this._pendingJoinFail = (reason) => {
+          if (reason === 'notfound' && attempt < MAX_RETRIES && !settled && !this.closed) {
+            console.log(`[join] Host peer not found on attempt ${attempt}, retrying in 1.5s...`);
+            retryTimer = setTimeout(tryConnect, 1500);
+          } else {
+            fail(reason);
+          }
+        };
+
+        const conn = this.peer.connect(PREFIX + code, { reliable: true });
+        activeConn = conn;
+
+        conn.on('open', () => {
+          conn.send({ type: 'hello', name: this.name });
+        });
+
+        conn.on('data', (msg) => {
+          if (!settled) {
+            if (msg.type === 'welcome') {
+              settled = true;
+              clearTimeout(timer);
+              clearTimeout(retryTimer);
+              this._pendingJoinFail = null;
+              this.code = code;
+              this.hostConn = conn;
+              this.state = msg.state;
+              this._setMembers(msg.members);
+              resolve();
+            } else if (msg.type === 'reject') {
+              fail(msg.reason);
+            }
+            return;
+          }
+          if (msg.type === 'hb') return;
+          this._onHostMsg(msg);
+        });
+
+        conn.on('close', () => {
+          if (settled && !this.closed) {
+            this.emit('host-left');
+          } else if (!settled && attempt < MAX_RETRIES && !this.closed) {
+            retryTimer = setTimeout(tryConnect, 1500);
+          } else if (!settled) {
+            fail('notfound');
+          }
+        });
+
+        conn.on('error', (err) => {
+          console.warn('[join conn err]', err);
+          if (!settled && attempt < MAX_RETRIES && !this.closed) {
+            retryTimer = setTimeout(tryConnect, 1500);
+          } else if (!settled) {
+            fail('net');
+          }
+        });
       };
 
-      const conn = this.peer.connect(PREFIX + code, { reliable: true });
-      conn.on('open', () => conn.send({ type: 'hello', name: this.name }));
-      conn.on('data', (msg) => {
-        if (!settled) {
-          if (msg.type === 'welcome') {
-            settled = true;
-            clearTimeout(timer);
-            this._pendingJoinFail = null;
-            this.code = code;
-            this.hostConn = conn;
-            this.state = msg.state;
-            this._setMembers(msg.members);
-            resolve();
-          } else if (msg.type === 'reject') {
-            fail(msg.reason);
-          }
-          return;
-        }
-        this._onHostMsg(msg);
-      });
-      conn.on('close', () => {
-        if (settled && !this.closed) this.emit('host-left');
-        else if (!settled) fail(isPeerUnavailable ? 'notfound' : 'net');
-      });
-      conn.on('error', () => fail('net'));
+      tryConnect();
     });
   }
 
   leave() {
     if (this.closed) return;
     this.closed = true;
+    this._stopHeartbeat();
     this.calls.forEach((c) => c.close());
     this.conns.forEach((c) => c.close());
     this.hostConn?.close();
@@ -179,6 +305,10 @@ export class Room {
     if (e.type === 'peer-unavailable') {
       if (this._pendingJoinFail) this._pendingJoinFail('notfound');
       return; // a member we tried to call is gone — ignore
+    }
+    if (this.isHost && !this.closed && ['network', 'server-error', 'socket-error', 'socket-closed', 'disconnected'].includes(e.type)) {
+      this._recoverHost();
+      return;
     }
     if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type)) {
       this.emit('net-error', e);
