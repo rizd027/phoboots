@@ -322,7 +322,7 @@ function sessionView() {
   <div class="session phase-${phase}">
     <header class="topbar">
       <div class="tb-left">
-        ${idx > 0 && phase !== 'done' ? `<button class="text-btn" data-action="back" id="btn-phase-back">${ic.back}${t('back')}</button>` : ''}
+        ${idx > 0 && phase !== 'done' ? `<button class="text-btn" data-action="back" id="btn-phase-back">${ic.back}<span class="tb-btn-label">${t('back')}</span></button>` : ''}
         <button class="icon-btn" data-action="leave" id="btn-leave" title="${t('leave')}">${ic.x}</button>
       </div>
       <ol class="stepper">
