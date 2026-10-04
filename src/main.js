@@ -402,6 +402,8 @@ function phaseView(phase) {
 
     case 'shoot': {
       const total = S.shooting ? S.shots.length : shotsOf(s.layout);
+      const timerSecs = s.timerSecs || 3;
+      const isPreset = [3, 5, 7, 10].includes(timerSecs);
       return `
       <section class="phase-inner shoot">
         <div class="shoot-head">
@@ -414,6 +416,23 @@ function phaseView(phase) {
           <div class="flash" id="flash"></div>
         </div>
         <div class="shoot-bar">
+          <div class="timer-selector" title="${t('timer')}">
+            <span class="timer-label">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              <span>${t('timer')}</span>
+            </span>
+            <div class="timer-pills">
+              ${[3, 5, 7, 10].map((sec) => `
+                <button class="timer-pill ${timerSecs === sec ? 'active' : ''}" data-action="set-timer" data-secs="${sec}" ${S.shooting ? 'disabled' : ''}>
+                  ${sec}s
+                </button>
+              `).join('')}
+              <div class="timer-custom-wrap">
+                <input type="number" min="2" max="30" class="timer-custom-input ${!isPreset ? 'active' : ''}" id="timer-custom-input" value="${!isPreset ? timerSecs : ''}" placeholder="..." title="${t('timerCustom')} (2-30s)" ${S.shooting ? 'disabled' : ''} />
+                <span class="timer-sec-unit">s</span>
+              </div>
+            </div>
+          </div>
           <div class="progress" id="progress"></div>
           <button class="btn primary big" data-action="shoot" id="btn-shoot">${ic.cam}<span>${t('startShooting')}</span></button>
         </div>
@@ -857,6 +876,18 @@ function updateShoot() {
     btn.disabled = S.shooting;
     btn.querySelector('span').textContent = S.shooting ? t('shooting') : t('startShooting');
   }
+  const timerSecs = st().timerSecs || 3;
+  const isPreset = [3, 5, 7, 10].includes(timerSecs);
+  document.querySelectorAll('.timer-pill').forEach((b) => {
+    b.classList.toggle('active', parseInt(b.dataset.secs, 10) === timerSecs);
+    b.disabled = S.shooting;
+  });
+  const timerInp = document.getElementById('timer-custom-input');
+  if (timerInp && document.activeElement !== timerInp) {
+    timerInp.classList.toggle('active', !isPreset);
+    timerInp.value = !isPreset ? timerSecs : '';
+    timerInp.disabled = S.shooting;
+  }
   const thumbs = document.getElementById('thumbs');
   if (thumbs) {
     const ratio = LAYOUTS[st().layout].cellRatio;
@@ -1061,6 +1092,7 @@ function initialState(theme = 'classic', phase) {
     caption: '',
     showDate: true,
     aiBg: 'none',
+    timerSecs: 3,
   };
 }
 
@@ -1224,14 +1256,15 @@ async function hostRunShoot() {
   const room = S.room;
   if (!room || S.shooting || st().phase !== 'shoot') return;
   const total = shotsOf(st().layout);
+  const secs = Math.max(2, Math.min(30, parseInt(st().timerSecs, 10) || 3));
   const participants = getParticipants();
   S.participants = participants;
   room.send('shoot-start', { total, participants });
   await sleep(600);
   for (let i = 0; i < total; i++) {
     if (room.closed || st().phase !== 'shoot') return;
-    room.send('countdown', { i, secs: 3 });
-    await sleep(3000 + 1500);
+    room.send('countdown', { i, secs });
+    await sleep(secs * 1000 + 1500);
   }
   const t0 = Date.now();
   while (Date.now() - t0 < 6000 && !S.shots.every((_, i) => shotReady(i))) await sleep(200);
@@ -1532,6 +1565,19 @@ const actions = {
       }
     }
   },
+  'set-timer': (el) => {
+    if (S.shooting) return;
+    const secs = Math.max(2, Math.min(30, parseInt(el.dataset.secs, 10) || 3));
+    S.room?.setState({ timerSecs: secs });
+    document.querySelectorAll('.timer-pill').forEach((b) => {
+      b.classList.toggle('active', parseInt(b.dataset.secs, 10) === secs);
+    });
+    const inp = document.getElementById('timer-custom-input');
+    if (inp) {
+      inp.classList.remove('active');
+      inp.value = '';
+    }
+  },
   shoot: () => (S.room.isHost ? hostRunShoot() : S.room.send('request-shoot')),
   pick: (el) => {
     const i = +el.dataset.i;
@@ -1602,6 +1648,13 @@ app.addEventListener('input', (e) => {
     pushCaption(el.value);
   } else if (el.id === 'color-input') {
     pushColor(el.value);
+  } else if (el.id === 'timer-custom-input') {
+    const val = parseInt(el.value, 10);
+    if (!isNaN(val) && val >= 2 && val <= 30) {
+      S.room?.setState({ timerSecs: val });
+      document.querySelectorAll('.timer-pill').forEach((b) => b.classList.remove('active'));
+      el.classList.add('active');
+    }
   } else if (el.classList.contains('code-box')) {
     const v = el.value.toUpperCase().replace(/[^A-Z]/g, '');
     el.value = v.slice(-1);
@@ -1611,7 +1664,17 @@ app.addEventListener('input', (e) => {
 });
 
 app.addEventListener('change', (e) => {
-  if (e.target.id === 'date-toggle') S.room?.setState({ showDate: e.target.checked });
+  if (e.target.id === 'date-toggle') {
+    S.room?.setState({ showDate: e.target.checked });
+  } else if (e.target.id === 'timer-custom-input') {
+    let val = parseInt(e.target.value, 10);
+    if (isNaN(val) || val < 2) val = 3;
+    if (val > 30) val = 30;
+    e.target.value = val;
+    S.room?.setState({ timerSecs: val });
+    document.querySelectorAll('.timer-pill').forEach((b) => b.classList.remove('active'));
+    e.target.classList.add('active');
+  }
 });
 
 app.addEventListener('keydown', (e) => {
