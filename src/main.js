@@ -30,6 +30,7 @@ const S = {
   shooting: false,
   lastPhase: null,
   finalBlob: null,
+  flashMode: localStorage.getItem('phoboots-flash') || 'on', // off | on | standby
 };
 const videos = new Map(); // peerId -> <video>
 const PHASES = ['frame', 'shoot', 'pick', 'style', 'done'];
@@ -64,6 +65,9 @@ const ic = {
   play: '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>',
   plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
   pin: '<svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
+  flash: '<svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+  flashOff: '<svg viewBox="0 0 24 24"><line x1="2" y1="2" x2="22" y2="22"/><polygon points="13 2 3 14 12 14 11 22 13 18"/><polygon points="17 10 21 10 16 16"/></svg>',
+  flashStandby: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>',
 };
 
 /* =========================================================
@@ -105,6 +109,18 @@ const shutter = () => {
   beep(1400, 0.05, 'square', 0.04);
   setTimeout(() => beep(600, 0.09, 'triangle', 0.05), 40);
 };
+
+async function applyFlashMode() {
+  const isStandby = S.view === 'session' && st().phase === 'shoot' && S.flashMode === 'standby';
+  document.body.classList.toggle('flash-standby', isStandby);
+  try {
+    const track = S.stream?.getVideoTracks()[0];
+    const caps = track?.getCapabilities?.();
+    if (caps && 'torch' in caps) {
+      await track.applyConstraints({ advanced: [{ torch: isStandby }] });
+    }
+  } catch (_) {}
+}
 
 const langBtn = (cls = '') =>
   `<button class="lang-btn ${cls}" data-action="lang" id="btn-lang" aria-label="Change language">
@@ -459,20 +475,40 @@ function phaseView(phase) {
           <div class="flash" id="flash"></div>
         </div>
         <div class="shoot-bar">
-          <div class="timer-selector" title="${t('timer')}">
-            <span class="timer-label">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              <span>${t('timer')}</span>
-            </span>
-            <div class="timer-pills">
-              ${[1, 3, 5, 7, 10].map((sec) => `
-                <button class="timer-pill ${timerSecs === sec ? 'active' : ''}" data-action="set-timer" data-secs="${sec}" ${S.shooting ? 'disabled' : ''}>
-                  ${sec}s
+          <div class="shoot-controls-row">
+            <div class="timer-selector" title="${t('timer')}">
+              <span class="timer-label">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <span>${t('timer')}</span>
+              </span>
+              <div class="timer-pills">
+                ${[1, 3, 5, 7, 10].map((sec) => `
+                  <button class="timer-pill ${timerSecs === sec ? 'active' : ''}" data-action="set-timer" data-secs="${sec}" ${S.shooting ? 'disabled' : ''}>
+                    ${sec}s
+                  </button>
+                `).join('')}
+                <div class="timer-custom-wrap">
+                  <input type="number" min="1" max="30" class="timer-custom-input ${!isPreset ? 'active' : ''}" id="timer-custom-input" value="${!isPreset ? timerSecs : ''}" placeholder="..." title="${t('timerCustom')} (1-30s)" ${S.shooting ? 'disabled' : ''} />
+                  <span class="timer-sec-unit">s</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flash-selector" title="${t('flash')}">
+              <span class="flash-label">
+                ${ic.flash}
+                <span>${t('flash')}</span>
+              </span>
+              <div class="flash-pills">
+                <button class="flash-pill ${S.flashMode === 'off' ? 'active' : ''}" data-action="set-flash" data-mode="off" title="${t('flashOff')}" ${S.shooting ? 'disabled' : ''}>
+                  ${ic.flashOff}<span>${t('flashOff')}</span>
                 </button>
-              `).join('')}
-              <div class="timer-custom-wrap">
-                <input type="number" min="1" max="30" class="timer-custom-input ${!isPreset ? 'active' : ''}" id="timer-custom-input" value="${!isPreset ? timerSecs : ''}" placeholder="..." title="${t('timerCustom')} (1-30s)" ${S.shooting ? 'disabled' : ''} />
-                <span class="timer-sec-unit">s</span>
+                <button class="flash-pill ${S.flashMode === 'on' ? 'active' : ''}" data-action="set-flash" data-mode="on" title="${t('flashOn')}" ${S.shooting ? 'disabled' : ''}>
+                  ${ic.flash}<span>${t('flashOn')}</span>
+                </button>
+                <button class="flash-pill ${S.flashMode === 'standby' ? 'active' : ''}" data-action="set-flash" data-mode="standby" title="${t('flashStandby')}" ${S.shooting ? 'disabled' : ''}>
+                  ${ic.flashStandby}<span>${t('flashStandby')}</span>
+                </button>
               </div>
             </div>
           </div>
@@ -794,6 +830,7 @@ function renderFrameThumbnails() {
 
 function updatePhase() {
   const s = st();
+  applyFlashMode();
   switch (s.phase) {
     case 'frame': {
       document.querySelectorAll('.layout-pill').forEach((c) => c.classList.toggle('selected', c.dataset.layout === s.layout));
@@ -1357,11 +1394,28 @@ async function runCountdown({ i, secs }) {
   const myVid = videos.get(S.room.myId);
   const src = captureFrame(myVid, 480, 0.72);
   shutter();
-  const fl = document.getElementById('flash');
-  if (fl) {
-    fl.classList.remove('go');
-    void fl.offsetWidth;
-    fl.classList.add('go');
+  if (S.flashMode !== 'off') {
+    const fl = document.getElementById('flash');
+    if (fl) {
+      fl.classList.remove('go');
+      void fl.offsetWidth;
+      fl.classList.add('go');
+    }
+    if (S.flashMode === 'on') {
+      try {
+        const track = S.stream?.getVideoTracks()[0];
+        const caps = track?.getCapabilities?.();
+        if (caps && 'torch' in caps) {
+          track.applyConstraints({ advanced: [{ torch: true }] }).then(() => {
+            setTimeout(() => {
+              if (S.flashMode !== 'standby') {
+                track.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
+              }
+            }, 300);
+          }).catch(() => {});
+        }
+      } catch (_) {}
+    }
   }
 
   if (!S.shots[i]) S.shots[i] = {};
@@ -1403,6 +1457,14 @@ function gotoPhase(phase) {
 }
 
 function leave() {
+  document.body.classList.remove('flash-standby');
+  try {
+    const track = S.stream?.getVideoTracks()[0];
+    const caps = track?.getCapabilities?.();
+    if (caps && 'torch' in caps) {
+      track.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {});
+    }
+  } catch (_) {}
   try {
     S.room?.leave();
   } catch {
@@ -1618,6 +1680,18 @@ const actions = {
     if (inp) {
       inp.classList.remove('active');
       inp.value = '';
+    }
+  },
+  'set-flash': (el) => {
+    if (S.shooting) return;
+    const mode = el.dataset.mode;
+    if (['off', 'on', 'standby'].includes(mode)) {
+      S.flashMode = mode;
+      localStorage.setItem('phoboots-flash', mode);
+      document.querySelectorAll('.flash-pill').forEach((b) => {
+        b.classList.toggle('active', b.dataset.mode === mode);
+      });
+      applyFlashMode();
     }
   },
   shoot: () => (S.room.isHost ? hostRunShoot() : S.room.send('request-shoot')),
