@@ -19,6 +19,32 @@ export function generateCode(len = 5) {
   return s;
 }
 
+export const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  {
+    urls: [
+      'stun:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:80',
+      'turn:openrelay.metered.ca:443',
+      'turn:openrelay.metered.ca:443?transport=tcp'
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  }
+];
+
+export const PEER_OPTIONS = {
+  debug: 1,
+  pingInterval: 3000,
+  config: {
+    iceServers: ICE_SERVERS,
+    sdpSemantics: 'unified-plan'
+  }
+};
+
 export class Room {
   constructor({ name, stream, solo = false }) {
     this.name = (name || 'Guest').slice(0, 20);
@@ -59,8 +85,7 @@ export class Room {
 
   _open(id) {
     return new Promise((resolve, reject) => {
-      // 3-second ping interval to keep cellular CGNAT NAT mapping active
-      const peer = id ? new Peer(id, { debug: 1, pingInterval: 3000 }) : new Peer({ debug: 1, pingInterval: 3000 });
+      const peer = id ? new Peer(id, PEER_OPTIONS) : new Peer(PEER_OPTIONS);
       const onErr = (e) => {
         peer.destroy();
         reject(e);
@@ -143,13 +168,17 @@ export class Room {
     this._hbTimer = setInterval(() => {
       if (this.closed) return;
       if (this.isHost) {
-        if (!this.peer || this.peer.disconnected || this.peer.destroyed) {
+        // Keep cellular baseband radio active and prevent CGNAT timeout
+        try {
+          fetch('https://0.peerjs.com/', { mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+        } catch {}
+        if (!this.peer || this.peer.disconnected || this.peer.destroyed || !this.peer.socket?._socket || this.peer.socket._socket.readyState !== 1) {
           this._recoverHost();
         } else if (this.conns.size > 0) {
           this._broadcast({ type: 'hb' });
         }
       }
-    }, 3500);
+    }, 3000);
   }
 
   _stopHeartbeat() {
@@ -199,7 +228,7 @@ export class Room {
     this.myId = this.peer.id;
     this.peer.on('call', (call) => this._answer(call));
 
-    const MAX_RETRIES = 3;
+    const MAX_RETRIES = 5;
     let attempt = 0;
 
     return new Promise((resolve, reject) => {
@@ -210,13 +239,27 @@ export class Room {
       const fail = (reason) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        clearTimeout(overallTimer);
         clearTimeout(retryTimer);
         this._pendingJoinFail = null;
         this.leave();
         reject(new Error(reason));
       };
-      const timer = setTimeout(() => fail('notfound'), 22000);
+      const overallTimer = setTimeout(() => fail('notfound'), 25000);
+
+      const scheduleRetry = (reason) => {
+        if (settled || this.closed) return;
+        if (retryTimer) return; // avoid duplicate schedule in same attempt
+        if (attempt < MAX_RETRIES) {
+          console.log(`[join] Retrying host connection (attempt ${attempt}/${MAX_RETRIES}) in 1.8s...`);
+          retryTimer = setTimeout(() => {
+            retryTimer = null;
+            tryConnect();
+          }, 1800);
+        } else {
+          fail(reason || 'notfound');
+        }
+      };
 
       const tryConnect = () => {
         if (settled || this.closed) return;
@@ -228,18 +271,14 @@ export class Room {
         }
 
         this._pendingJoinFail = (reason) => {
-          if (reason === 'notfound' && attempt < MAX_RETRIES && !settled && !this.closed) {
-            console.log(`[join] Host peer not found on attempt ${attempt}, retrying in 1.5s...`);
-            retryTimer = setTimeout(tryConnect, 1500);
-          } else {
-            fail(reason);
-          }
+          scheduleRetry(reason);
         };
 
         const conn = this.peer.connect(PREFIX + code, { reliable: true });
         activeConn = conn;
 
         conn.on('open', () => {
+          console.log('[join] Connected to host, sending hello');
           conn.send({ type: 'hello', name: this.name });
         });
 
@@ -247,7 +286,7 @@ export class Room {
           if (!settled) {
             if (msg.type === 'welcome') {
               settled = true;
-              clearTimeout(timer);
+              clearTimeout(overallTimer);
               clearTimeout(retryTimer);
               this._pendingJoinFail = null;
               this.code = code;
@@ -267,19 +306,15 @@ export class Room {
         conn.on('close', () => {
           if (settled && !this.closed) {
             this.emit('host-left');
-          } else if (!settled && attempt < MAX_RETRIES && !this.closed) {
-            retryTimer = setTimeout(tryConnect, 1500);
           } else if (!settled) {
-            fail('notfound');
+            scheduleRetry('notfound');
           }
         });
 
         conn.on('error', (err) => {
           console.warn('[join conn err]', err);
-          if (!settled && attempt < MAX_RETRIES && !this.closed) {
-            retryTimer = setTimeout(tryConnect, 1500);
-          } else if (!settled) {
-            fail('net');
+          if (!settled) {
+            scheduleRetry('net');
           }
         });
       };
