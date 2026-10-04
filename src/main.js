@@ -321,8 +321,11 @@ function sessionView() {
   <div class="session phase-${phase}">
     <header class="topbar">
       <div class="tb-left">
-        ${idx > 0 && phase !== 'done' ? `<button class="text-btn" data-action="back" id="btn-phase-back">${ic.back}<span class="tb-btn-label">${t('back')}</span></button>` : ''}
-        <button class="icon-btn" data-action="leave" id="btn-leave" title="${t('leave')}">${ic.x}</button>
+        ${idx > 0 && phase !== 'done' ? `
+          <button class="icon-btn" data-action="back" id="btn-phase-back" title="${t('back')}">${ic.back}</button>
+        ` : `
+          <button class="icon-btn btn-leave-room" data-action="leave" id="btn-leave" title="${t('leave')}">${ic.x}</button>
+        `}
       </div>
       <ol class="stepper">
         ${PHASES.map(
@@ -334,6 +337,9 @@ function sessionView() {
         ${!S.room.solo ? `<span class="code-badge" title="Room code">${S.room.code}</span>` : ''}
         ${hasMic ? `<button class="icon-btn ${micOn ? '' : 'off'}" data-action="mic" id="btn-mic" title="${t('mic')}">${micOn ? ic.mic : ic.micOff}</button>` : ''}
         ${langBtn('sm')}
+        ${idx > 0 && phase !== 'done' ? `
+          <button class="icon-btn btn-leave-room" data-action="leave" id="btn-leave-top" title="${t('leave')}">${ic.x}</button>
+        ` : ''}
       </div>
     </header>
     <main class="phase" id="phase">${phaseView(phase)}</main>
@@ -366,6 +372,39 @@ function sessionView() {
       </div>
     </div>` : ''}
   </div>`;
+}
+
+function stripPreviewAside(s, phase = 'style') {
+  const nextPhase = phase === 'pick' ? 'style' : 'done';
+  return `
+  <aside class="preview-col">
+    <div class="mobile-preview-side left">
+      <button class="side-action-btn" data-action="expand-preview" title="${t('expandPreview')}">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        <span>${t('expand')}</span>
+      </button>
+    </div>
+
+    <div class="strip-preview-wrap layout-${s.layout}" data-action="expand-preview" title="${t('expandPreview')}">
+      <canvas id="preview" class="strip-preview layout-${s.layout}"></canvas>
+      <div class="live-strip-overlay ${S.liveMode ? 'active' : ''}" id="live-overlay"></div>
+      <button class="strip-expand-btn" data-action="expand-preview" title="${t('expandPreview')}">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        <span>${t('expand')}</span>
+      </button>
+      ${S.liveClips.some(Boolean) ? `
+        <button class="live-pill-toggle ${S.liveMode ? 'active' : ''}" data-action="toggle-live" title="${t('liveHelp')}">
+          <span class="live-dot"></span> <b>LIVE</b>
+        </button>` : ''}
+    </div>
+
+    <div class="mobile-preview-side right">
+      <button class="side-action-btn primary" data-action="goto" data-phase="${nextPhase}" title="${t('next')}">
+        <span>${t('next')}</span>
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+    </div>
+  </aside>`;
 }
 
 function phaseView(phase) {
@@ -485,24 +524,7 @@ function phaseView(phase) {
             <button class="ticket" data-action="goto" data-phase="style" id="btn-next"><span>${t('next')}</span></button>
           </div>
         </div>
-        <aside class="preview-col">
-          <div class="strip-preview-wrap layout-${s.layout}" data-action="expand-preview" title="${t('expandPreview')}">
-            <canvas id="preview" class="strip-preview layout-${s.layout}"></canvas>
-            <div class="live-strip-overlay ${S.liveMode ? 'active' : ''}" id="live-overlay"></div>
-            <button class="strip-expand-btn" data-action="expand-preview" title="${t('expandPreview')}">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-              <span>${t('expand')}</span>
-            </button>
-            ${S.liveClips.some(Boolean) ? `
-              <button class="live-pill-toggle ${S.liveMode ? 'active' : ''}" data-action="toggle-live" title="${t('liveHelp')}">
-                <span class="live-dot"></span> <b>LIVE</b>
-              </button>` : ''}
-          </div>
-          <button class="mobile-expand-hint" data-action="expand-preview">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-            <span>${t('tapToExpand')}</span>
-          </button>
-        </aside>
+        ${stripPreviewAside(s, 'pick')}
       </section>`;
 
     case 'style': {
@@ -515,24 +537,7 @@ function phaseView(phase) {
 
       return `
       <section class="phase-inner split reverse">
-        <aside class="preview-col">
-          <div class="strip-preview-wrap layout-${s.layout}" data-action="expand-preview" title="${t('expandPreview')}">
-            <canvas id="preview" class="strip-preview layout-${s.layout}"></canvas>
-            <div class="live-strip-overlay ${S.liveMode ? 'active' : ''}" id="live-overlay"></div>
-            <button class="strip-expand-btn" data-action="expand-preview" title="${t('expandPreview')}">
-              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-              <span>${t('expand')}</span>
-            </button>
-            ${S.liveClips.some(Boolean) ? `
-              <button class="live-pill-toggle ${S.liveMode ? 'active' : ''}" data-action="toggle-live" title="${t('liveHelp')}">
-                <span class="live-dot"></span> <b>LIVE</b>
-              </button>` : ''}
-          </div>
-          <button class="mobile-expand-hint" data-action="expand-preview">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
-            <span>${t('tapToExpand')}</span>
-          </button>
-        </aside>
+        ${stripPreviewAside(s, 'style')}
 
         <div class="split-main style-panel glass">
           <div class="style-panel-head">
