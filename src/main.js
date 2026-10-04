@@ -205,8 +205,9 @@ function homeView() {
     </section>
 
     <section id="booths" class="container section">
-      <h2>${t('boothsTitle')}</h2>
-      ${boothCards('host')}
+      <h2>${t('pickFrame')}</h2>
+      <p class="sub" style="text-align:center;margin-top:-8px;margin-bottom:28px;">37+ Aesthetic Korean Photobooth Frames</p>
+      ${homeFramesGallery()}
     </section>
 
     <section id="faq" class="container section faq">
@@ -223,14 +224,36 @@ function homeView() {
   </footer>`;
 }
 
+function homeFramesGallery() {
+  const featured = ['hearts', 'denim_stars', 'teddy', 'boba', 'tulips', 'vintage_curtain', 'disco', 'botanical'];
+  return `<div class="home-frames-showcase">
+    ${featured
+      .map((id) => {
+        const f = getFrame(id);
+        return `
+        <div class="home-frame-card">
+          <div class="home-frame-canvas-holder">
+            <canvas class="home-frame-canvas" data-frame-id="${f.id}"></canvas>
+          </div>
+          <span class="home-frame-name">${f.name}</span>
+        </div>`;
+      })
+      .join('')}
+  </div>`;
+}
+
 function boothView() {
   return `
   <div class="corner">${langBtn()}</div>
   <main class="center-view">
-    <h1 class="title">${t('pickBooth')}</h1>
-    <p class="sub">${t('pickBoothDesc')}</p>
-    ${nameField()}
-    ${boothCards(S.mode)}
+    <h1 class="title">${t('enterNameTitle')}</h1>
+    <p class="sub">${t('enterNameSub')}</p>
+    <form class="join-form" id="name-start-form">
+      ${nameField()}
+      <button class="btn primary big" type="submit" id="btn-start-submit">
+        ${ic.play}<span>${t('startBooth')}</span>
+      </button>
+    </form>
     <button class="link-btn" data-action="home" id="btn-back">${ic.back}${t('back')}</button>
   </main>`;
 }
@@ -510,6 +533,26 @@ function phaseView(phase) {
             </div>
           </div>
 
+          <!-- AI Background Studio -->
+          <div class="field">
+            <div class="style-field-head">
+              <label class="field-title">${t('aiBg')}</label>
+            </div>
+            <div class="chip-row">
+              ${[
+                { id: 'none', label: t('aiBgNone') },
+                { id: 'cutout', label: t('aiBgCutout') },
+                { id: 'blur', label: t('aiBgBlur') },
+                { id: 'pastel', label: t('aiBgPastel') },
+              ].map(
+                (bg) => `
+                <button class="chip ${(s.aiBg || 'none') === bg.id ? 'active' : ''}" data-action="ai-bg" data-bg="${bg.id}">
+                  ${bg.label}
+                </button>`
+              ).join('')}
+            </div>
+          </div>
+
           <!-- Filter selection -->
           <div class="field">
             <label>${t('filter')}</label>
@@ -601,6 +644,11 @@ function render() {
 }
 
 function afterRender() {
+  if (S.view === 'home') {
+    document.querySelectorAll('.home-frame-canvas').forEach((c) => {
+      renderFramePreview(c, c.dataset.frameId, '4cut', 130);
+    });
+  }
   if (S.view === 'lobby') updateLobby();
   if (S.view === 'session') {
     S.lastPhase = st().phase;
@@ -855,6 +903,7 @@ function updateStyle() {
   const s = st();
   document.querySelectorAll('[data-action="filter"]').forEach((b) => b.classList.toggle('active', b.dataset.filter === s.filter));
   document.querySelectorAll('[data-action="color"]').forEach((b) => b.classList.toggle('active', b.dataset.color === s.frameColor));
+  document.querySelectorAll('[data-action="ai-bg"]').forEach((b) => b.classList.toggle('active', (s.aiBg || 'none') === b.dataset.bg));
   document.querySelectorAll('.style-frame-card').forEach((b) => b.classList.toggle('selected', b.dataset.frame === (s.frameId || 'hearts')));
   document.querySelectorAll('.style-cat-pill').forEach((b) => b.classList.toggle('active', b.dataset.cat === (S.styleFrameCat || 'all')));
   document.querySelectorAll('[data-action="layout"]').forEach((b) => b.classList.toggle('active', b.dataset.layout === s.layout));
@@ -893,6 +942,7 @@ function stripOpts() {
     frameColor: s.frameColor,
     caption: s.caption,
     showDate: s.showDate,
+    aiBg: s.aiBg || 'none',
   };
 }
 
@@ -930,11 +980,11 @@ async function drawFinal() {
 /* =========================================================
    Room flows
    ========================================================= */
-function initialState(theme, phase) {
-  const th = THEMES[theme];
+function initialState(theme = 'classic', phase) {
+  const th = THEMES[theme] || THEMES.classic;
   return {
     phase,
-    theme,
+    theme: theme || 'classic',
     layout: '4cut',
     frameId: 'hearts',
     picks: [],
@@ -942,6 +992,7 @@ function initialState(theme, phase) {
     frameColor: th.frameColors[0],
     caption: '',
     showDate: true,
+    aiBg: 'none',
   };
 }
 
@@ -1190,11 +1241,16 @@ const actions = {
   },
   start: () => {
     S.mode = 'host';
-    go('booth');
+    if (S.name) startHost('classic');
+    else go('booth');
   },
   solo: () => {
     S.mode = 'solo';
-    go('booth');
+    if (S.name) startSolo('classic');
+    else go('booth');
+  },
+  'ai-bg': (el) => {
+    S.room?.setState({ aiBg: el.dataset.bg });
   },
   join: () => {
     S.joinError = '';
@@ -1463,6 +1519,13 @@ app.addEventListener('paste', (e) => {
 });
 
 app.addEventListener('submit', (e) => {
+  if (e.target.id === 'name-start-form') {
+    e.preventDefault();
+    saveName();
+    if (S.mode === 'solo') startSolo('classic');
+    else startHost('classic');
+    return;
+  }
   if (e.target.id !== 'join-form') return;
   e.preventDefault();
   const code = [...document.querySelectorAll('.code-box')].map((b) => b.value).join('');

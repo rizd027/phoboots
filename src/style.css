@@ -782,6 +782,55 @@ a {
   gap: 14px;
   width: 100%;
 }
+
+/* Home frames showcase */
+.home-frames-showcase {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  width: 100%;
+}
+@media (max-width: 860px) {
+  .home-frames-showcase {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+}
+.home-frame-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 10px 12px;
+  box-shadow: var(--shadow);
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
+}
+.home-frame-card:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--shadow-lg);
+}
+.home-frame-canvas-holder {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.home-frame-canvas {
+  width: 100%;
+  max-width: 130px;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+.home-frame-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+}
 .booth-card {
   position: relative;
   aspect-ratio: 4 / 3;

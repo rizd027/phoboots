@@ -1,5 +1,6 @@
 // Canvas compositor: builds the final photo strip from everyone's shots.
 import { LAYOUTS, slotsOf } from './config.js';
+import { applyAiBackground, clearAiCache } from './ai-background.js';
 
 const imgCache = new Map();
 
@@ -18,6 +19,7 @@ export function loadImg(src) {
 
 export function clearImgCache() {
   imgCache.clear();
+  clearAiCache();
 }
 
 /* ---------- helpers ---------- */
@@ -120,7 +122,7 @@ function applyFilter(ctx, w, h, filter, seed = 1) {
  * Draw a single cell: all participants of one shot side by side.
  * photos: [{ name, src }] already ordered.
  */
-async function drawCell(w, h, photos, filter, seed) {
+async function drawCell(w, h, photos, filter, seed, aiBg = 'none') {
   const c = document.createElement('canvas');
   c.width = Math.round(w);
   c.height = Math.round(h);
@@ -134,7 +136,16 @@ async function drawCell(w, h, photos, filter, seed) {
   const sep = n > 1 ? Math.max(2, Math.round(w * 0.006)) : 0;
   const cw = (c.width - sep * (cols - 1)) / cols;
   const ch = (c.height - sep * (rows - 1)) / rows;
-  const imgs = await Promise.all(photos.map((p) => loadImg(p.src)));
+  const imgs = await Promise.all(
+    photos.map(async (p) => {
+      const baseImg = await loadImg(p.src);
+      if (!baseImg) return null;
+      if (aiBg && aiBg !== 'none') {
+        return applyAiBackground(baseImg, aiBg, p.src);
+      }
+      return baseImg;
+    })
+  );
 
   photos.forEach((p, i) => {
     const col = i % cols;
@@ -159,9 +170,9 @@ async function drawCell(w, h, photos, filter, seed) {
 }
 
 /** Render a single shot thumbnail into the given canvas. */
-export async function renderShotThumb(canvas, photos, filter, ratio, width = 360) {
+export async function renderShotThumb(canvas, photos, filter, ratio, width = 360, aiBg = 'none') {
   const h = Math.round(width / ratio);
-  const cell = await drawCell(width, h, photos, filter, 7);
+  const cell = await drawCell(width, h, photos, filter, 7, aiBg);
   canvas.width = width;
   canvas.height = h;
   canvas.getContext('2d').drawImage(cell, 0, 0);
@@ -297,7 +308,7 @@ export function renderFramePreview(canvas, frameId, layoutId = '4cut', width = 1
  * cells: array (length = slots) of photo arrays ([{ name, src }]) or null for empty slots.
  */
 export async function renderStrip(canvas, opts) {
-  const { layoutId, themeId, frameId = 'hearts', cells, filter, frameColor, caption, showDate } = opts;
+  const { layoutId, themeId, frameId = 'hearts', cells, filter, frameColor, caption, showDate, aiBg = 'none' } = opts;
   const frame = getFrame(frameId);
   const { width: W, height: H, cellW, cellH, L } = stripSize(layoutId);
   const font = frame.font || (themeId === 'vintage' ? 'Fraunces' : 'Inter');
@@ -322,7 +333,7 @@ export async function renderStrip(canvas, opts) {
 
   const radius = themeId === 'vintage' ? 0 : Math.round(W * 0.015);
   const rendered = await Promise.all(
-    cells.map((photos, i) => (photos ? drawCell(cellW, cellH, photos, filter, i + 11) : null))
+    cells.map((photos, i) => (photos ? drawCell(cellW, cellH, photos, filter, i + 11, aiBg) : null))
   );
 
   rendered.forEach((cell, i) => {
