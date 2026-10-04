@@ -778,8 +778,36 @@ function updatePhase() {
   }
 }
 
-const shotPhotos = (i) => S.participants.map((p) => ({ name: p.name, src: S.shots[i]?.[p.id] || null }));
-const shotReady = (i) => S.participants.length && S.participants.every((p) => p.id in (S.shots[i] || {}));
+function getParticipants() {
+  if (S.room && S.room.members && S.room.members.length > 0) {
+    return S.room.members.map((m) => ({ id: m.id, name: m.name }));
+  }
+  if (S.participants && S.participants.length > 0) {
+    return S.participants;
+  }
+  return [{ id: S.room?.myId || 'me', name: S.name || 'You' }];
+}
+
+const shotPhotos = (i) => {
+  const parts = getParticipants();
+  return parts.map((p) => {
+    let src = S.shots[i]?.[p.id] || null;
+    if (!src && p.id && videos.has(p.id)) {
+      const v = videos.get(p.id);
+      if (v && v.readyState >= 2) {
+        src = captureFrame(v, 640, 0.78);
+        if (!S.shots[i]) S.shots[i] = {};
+        S.shots[i][p.id] = src;
+      }
+    }
+    return { name: p.name, src };
+  });
+};
+
+const shotReady = (i) => {
+  const parts = getParticipants();
+  return parts.length > 0 && parts.every((p) => p.id in (S.shots[i] || {}));
+};
 
 function updateShoot() {
   const total = S.shooting || S.shots.length ? S.shots.length : shotsOf(st().layout);
@@ -1121,7 +1149,7 @@ function onState() {
 function onEvent(ev, data, from) {
   if (ev === 'shoot-start') {
     S.shots = Array.from({ length: data.total }, () => ({}));
-    S.participants = data.participants;
+    S.participants = (data.participants && data.participants.length > 0) ? data.participants : getParticipants();
     S.shooting = true;
     S.liveClips = [];
     S.liveBlobs = [];
@@ -1134,7 +1162,7 @@ function onEvent(ev, data, from) {
   } else if (ev === 'countdown') {
     runCountdown(data);
   } else if (ev === 'photo') {
-    if (!S.shots[data.i]) return;
+    if (!S.shots[data.i]) S.shots[data.i] = {};
     S.shots[data.i][from] = data.src;
     if (st().phase === 'shoot') updateShoot();
   } else if (ev === 'request-shoot' && S.room.isHost) {
@@ -1146,7 +1174,8 @@ async function hostRunShoot() {
   const room = S.room;
   if (!room || S.shooting || st().phase !== 'shoot') return;
   const total = shotsOf(st().layout);
-  const participants = room.members.map((m) => ({ id: m.id, name: m.name }));
+  const participants = getParticipants();
+  S.participants = participants;
   room.send('shoot-start', { total, participants });
   await sleep(600);
   for (let i = 0; i < total; i++) {
@@ -1183,7 +1212,9 @@ async function runCountdown({ i, secs }) {
   }
   if (get()) get().textContent = '';
   if (!S.room || S.room.closed) return;
-  const src = captureFrame(videos.get(S.room.myId));
+
+  const myVid = videos.get(S.room.myId);
+  const src = captureFrame(myVid, 640, 0.78);
   shutter();
   const fl = document.getElementById('flash');
   if (fl) {
@@ -1191,6 +1222,22 @@ async function runCountdown({ i, secs }) {
     void fl.offsetWidth;
     fl.classList.add('go');
   }
+
+  if (!S.shots[i]) S.shots[i] = {};
+  S.shots[i][S.room.myId] = src;
+
+  // Immediately capture any connected peer video stream as reliable instant fallback
+  if (S.room.members) {
+    S.room.members.forEach((m) => {
+      if (m.id !== S.room.myId && !S.shots[i][m.id]) {
+        const peerVid = videos.get(m.id);
+        if (peerVid && peerVid.readyState >= 2) {
+          S.shots[i][m.id] = captureFrame(peerVid, 640, 0.78);
+        }
+      }
+    });
+  }
+
   S.room.send('photo', { i, src });
 
   if (livePromise) {

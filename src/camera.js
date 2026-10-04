@@ -21,7 +21,7 @@ export function stopStream(stream) {
 }
 
 /** Grab a mirrored (selfie-style) JPEG from a playing <video>. */
-export function captureFrame(videoEl, maxW = 960) {
+export function captureFrame(videoEl, maxW = 640, quality = 0.8) {
   const vw = videoEl?.videoWidth || 640;
   const vh = videoEl?.videoHeight || 480;
   const scale = Math.min(1, maxW / vw);
@@ -44,5 +44,5 @@ export function captureFrame(videoEl, maxW = 960) {
     ctx.fillStyle = '#222';
     ctx.fillRect(0, 0, w, h);
   }
-  return c.toDataURL('image/jpeg', 0.88);
+  return c.toDataURL('image/jpeg', quality);
 }
