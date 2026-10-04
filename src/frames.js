@@ -2,13 +2,48 @@
 // Pure Canvas 2D vector/pattern rendering for maximum performance, crispness, and zero network lag.
 
 export const FRAME_CATEGORIES = [
-  { id: 'patterns', label: 'Patterns', icon: '🌸', badge: '10' },
-  { id: 'cozy', label: 'Cozy Frames', icon: '🧸', badge: '6 NEW' },
-  { id: 'food', label: 'Food & Cafe', icon: '🍙', badge: '5 NEW' },
-  { id: 'birthday', label: 'Birthday', icon: '🎂', badge: '5' },
-  { id: 'travel', label: 'Travel', icon: '✈️', badge: '4 NEW' },
-  { id: 'memes', label: 'Memes & Y2K', icon: '🐱', badge: '4' },
-  { id: 'simple', label: 'Simple', icon: '🎨', badge: '6' },
+  {
+    id: 'patterns',
+    label: 'Patterns',
+    icon: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><circle cx="7" cy="17" r="3"/><circle cx="17" cy="17" r="3"/></svg>',
+    badge: '10',
+  },
+  {
+    id: 'cozy',
+    label: 'Cozy Frames',
+    icon: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>',
+    badge: '6 NEW',
+  },
+  {
+    id: 'food',
+    label: 'Food & Cafe',
+    icon: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zM6 1v3M10 1v3M14 1v3"/></svg>',
+    badge: '5 NEW',
+  },
+  {
+    id: 'birthday',
+    label: 'Birthday',
+    icon: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>',
+    badge: '5',
+  },
+  {
+    id: 'travel',
+    label: 'Travel',
+    icon: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>',
+    badge: '4 NEW',
+  },
+  {
+    id: 'memes',
+    label: 'Memes & Y2K',
+    icon: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+    badge: '4',
+  },
+  {
+    id: 'simple',
+    label: 'Simple',
+    icon: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="3" y1="12" x2="21" y2="12"/></svg>',
+    badge: '6',
+  },
 ];
 
 /* ---------------- Helper Drawing Primitives ---------------- */

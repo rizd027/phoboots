@@ -119,7 +119,7 @@ const roomLink = () => `${location.origin}${location.pathname}?room=${S.room?.co
 function boothCards(mode) {
   const art = {
     classic: '<i class="b-dot pink"></i><i class="b-dot blue"></i>',
-    party: '<span class="b-emo">🎂</span><span class="b-balloon one">🎈</span><span class="b-balloon two">🎈</span>',
+    party: '<svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>',
     vintage: '<span class="b-curtain"></span><span class="b-lamp"></span>',
     neon: '<span class="b-neon">찰칵</span>',
   };
@@ -145,7 +145,7 @@ const nameField = () => `
    ========================================================= */
 function homeView() {
   return `
-  <div class="ribbon">♡ ${t('footer')}</div>
+  <div class="ribbon">${t('footer')}</div>
   <header class="nav container">
     ${logo()}
     <nav class="nav-links">
@@ -470,7 +470,8 @@ function phaseView(phase) {
             <div class="style-cats-wrap">
               <div class="style-cats">
                 <button class="style-cat-pill ${curCat === 'all' ? 'active' : ''}" data-action="style-cat" data-cat="all">
-                  <span>✨</span> <span>All (37)</span>
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+                  <span>All (37)</span>
                 </button>
                 ${FRAME_CATEGORIES.map(
                   (c) => `
@@ -1316,7 +1317,7 @@ const actions = {
         a.download = `phoboots-live-${s.layout}-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.webm`;
         a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-        toast('Live Video downloaded! 📹✨');
+        toast('Live Video downloaded!');
       } else {
         toast('Video recording not supported on this device');
       }
