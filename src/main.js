@@ -3,8 +3,9 @@ import { t, getLang, setLang } from './i18n.js';
 import { THEMES, LAYOUTS, FILTERS, slotsOf, shotsOf, MAX_MEMBERS } from './config.js';
 import { Room } from './room.js';
 import { getCamera, stopStream, captureFrame } from './camera.js';
-import { renderStrip, renderShotThumb, renderFramePreview, clearImgCache } from './compose.js';
+import { renderStrip, renderShotThumb, renderFramePreview, clearImgCache, stripSize, roundRect, drawCover } from './compose.js';
 import { FRAME_CATEGORIES, FRAME_TEMPLATES, getFrame } from './frames.js';
+import { recordLiveClip, recordCanvasVideo, isLivePhotoSupported } from './livephoto.js';
 
 /* =========================================================
    App state
@@ -20,7 +21,11 @@ const S = {
   joinError: '',
   joining: false,
   activeFrameCat: 'patterns',
+  styleFrameCat: 'patterns',
   shots: [], // [{ [peerId]: dataURL }]
+  liveClips: [], // [string objectUrl]
+  liveBlobs: [], // [Blob]
+  liveMode: false, // boolean Live Photo toggle
   participants: [], // [{ id, name }] snapshot at shoot start
   shooting: false,
   lastPhase: null,
@@ -412,31 +417,99 @@ function phaseView(phase) {
             <button class="ticket" data-action="goto" data-phase="style" id="btn-next"><span>${t('next')}</span></button>
           </div>
         </div>
-        <aside class="preview-col"><canvas id="preview" class="strip-preview layout-${s.layout}"></canvas></aside>
+        <aside class="preview-col">
+          <div class="strip-preview-wrap layout-${s.layout}">
+            <canvas id="preview" class="strip-preview layout-${s.layout}"></canvas>
+            <div class="live-strip-overlay ${S.liveMode ? 'active' : ''}" id="live-overlay"></div>
+            ${S.liveClips.some(Boolean) ? `
+              <button class="live-pill-toggle ${S.liveMode ? 'active' : ''}" data-action="toggle-live" title="${t('liveHelp')}">
+                <span class="live-dot"></span> <b>LIVE</b>
+              </button>` : ''}
+          </div>
+        </aside>
       </section>`;
 
     case 'style': {
       const th = THEMES[s.theme];
       const curFrame = getFrame(s.frameId || 'hearts');
+      const curCat = S.styleFrameCat || 'all';
+      const filteredFrames = curCat === 'all'
+        ? FRAME_TEMPLATES
+        : FRAME_TEMPLATES.filter((f) => f.cat === curCat);
+
       return `
       <section class="phase-inner split reverse">
-        <aside class="preview-col"><canvas id="preview" class="strip-preview layout-${s.layout}"></canvas></aside>
+        <aside class="preview-col">
+          <div class="strip-preview-wrap layout-${s.layout}">
+            <canvas id="preview" class="strip-preview layout-${s.layout}"></canvas>
+            <div class="live-strip-overlay ${S.liveMode ? 'active' : ''}" id="live-overlay"></div>
+            ${S.liveClips.some(Boolean) ? `
+              <button class="live-pill-toggle ${S.liveMode ? 'active' : ''}" data-action="toggle-live" title="${t('liveHelp')}">
+                <span class="live-dot"></span> <b>LIVE</b>
+              </button>` : ''}
+          </div>
+        </aside>
+
         <div class="split-main style-panel glass">
-          <h1 class="title display">${t('styleTitle')}</h1>
-          
-          <div class="field">
-            <label>${t('pickFrame')}: <b>${curFrame.name}</b></label>
-            <div class="mini-frame-row">
-              ${FRAME_TEMPLATES.map(
+          <div class="style-panel-head">
+            <h1 class="title display">${t('styleTitle')}</h1>
+            ${S.liveClips.some(Boolean) ? `
+              <button class="live-pill-toggle sm ${S.liveMode ? 'active' : ''}" data-action="toggle-live">
+                <span class="live-dot"></span> <b>LIVE PHOTO</b>
+              </button>
+            ` : ''}
+          </div>
+
+          <!-- DETAILED FRAME STUDIO -->
+          <div class="field style-frame-studio">
+            <div class="style-field-head">
+              <label class="field-title">${t('pickFrame')}: <b id="style-frame-name">${curFrame.name}</b></label>
+            </div>
+
+            <!-- Mini category tabs -->
+            <div class="style-cats-wrap">
+              <div class="style-cats">
+                <button class="style-cat-pill ${curCat === 'all' ? 'active' : ''}" data-action="style-cat" data-cat="all">
+                  <span>✨</span> <span>All (37)</span>
+                </button>
+                ${FRAME_CATEGORIES.map(
+                  (c) => `
+                  <button class="style-cat-pill ${curCat === c.id ? 'active' : ''}" data-action="style-cat" data-cat="${c.id}">
+                    <span>${c.icon}</span> <span>${c.label}</span>
+                  </button>`
+                ).join('')}
+              </div>
+            </div>
+
+            <!-- Scrollable Frame Cards with Live Canvas Previews -->
+            <div class="style-frame-cards-scroll" id="style-frame-cards">
+              ${filteredFrames.map(
                 (f) => `
-                <button class="mini-frame-chip ${s.frameId === f.id ? 'active' : ''}" data-action="pick-frame" data-frame="${f.id}" title="${f.name}">
-                  <span class="mfc-dot" style="background:${f.bgColor}"></span>
-                  <span>${f.name}</span>
+                <button class="style-frame-card ${s.frameId === f.id ? 'selected' : ''}" data-action="pick-frame" data-frame="${f.id}" title="${f.name}">
+                  <div class="style-frame-canvas-holder">
+                    <canvas class="style-frame-card-canvas" data-frame-id="${f.id}" data-layout="${s.layout}"></canvas>
+                    <span class="style-card-check">✓</span>
+                  </div>
+                  <span class="style-frame-card-name">${f.name}</span>
                 </button>`
               ).join('')}
             </div>
           </div>
 
+          <!-- Layout switcher in Style -->
+          <div class="field">
+            <label>${t('pickSize')}</label>
+            <div class="chip-row">
+              ${LAYOUT_IDS.map(
+                (id) => `
+                <button class="chip ${s.layout === id ? 'active' : ''}" data-action="layout" data-layout="${id}">
+                  ${t('l' + id)}
+                </button>`
+              ).join('')}
+            </div>
+          </div>
+
+          <!-- Filter selection -->
           <div class="field">
             <label>${t('filter')}</label>
             <div class="chip-row">
@@ -447,6 +520,7 @@ function phaseView(phase) {
             </div>
           </div>
 
+          <!-- Frame color palette -->
           <div class="field">
             <label>${t('frameColor')}</label>
             <div class="swatches">
@@ -460,11 +534,13 @@ function phaseView(phase) {
             </div>
           </div>
 
+          <!-- Caption -->
           <div class="field">
             <label for="caption-input">${t('caption')}</label>
             <input class="input" id="caption-input" maxlength="40" placeholder="${t('captionPh')}" value="${esc(s.caption)}" />
           </div>
 
+          <!-- Show date toggle -->
           <label class="toggle">
             <input type="checkbox" id="date-toggle" ${s.showDate ? 'checked' : ''} />
             <span class="track"></span>${t('showDate')}
@@ -479,11 +555,26 @@ function phaseView(phase) {
       return `
       <section class="phase-inner done">
         <div class="confetti" aria-hidden="true">${Array.from({ length: 28 }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>
-        <div class="done-art"><div class="spinner"></div><img id="final-img" class="final-strip layout-${s.layout}" alt="Your photobooth strip" /></div>
+        <div class="done-art">
+          <div class="spinner"></div>
+          <div class="strip-preview-wrap layout-${s.layout}">
+            <img id="final-img" class="final-strip layout-${s.layout}" alt="Your photobooth strip" />
+            <div class="live-strip-overlay ${S.liveMode ? 'active' : ''}" id="live-overlay"></div>
+            ${S.liveClips.some(Boolean) ? `
+              <button class="live-pill-toggle ${S.liveMode ? 'active' : ''}" data-action="toggle-live" title="${t('liveHelp')}">
+                <span class="live-dot"></span> <b>LIVE</b>
+              </button>` : ''}
+          </div>
+        </div>
         <div class="done-copy">
           <h1 class="title display">${t('doneTitle')}</h1>
           <p class="sub">${S.room.solo ? '' : t('doneDesc')}</p>
-          <button class="btn primary big" data-action="download" id="btn-download">${ic.download}${t('download')}</button>
+          <div class="done-download-buttons">
+            <button class="btn primary big" data-action="download" id="btn-download">${ic.download}${t('download')}</button>
+            ${S.liveClips.some(Boolean) ? `
+              <button class="btn secondary big live-dl-btn" data-action="download-live" id="btn-download-live">${ic.cam}<span>${t('downloadLive')}</span></button>
+            ` : ''}
+          </div>
           <div class="row">
             <button class="btn ghost" data-action="share-img" id="btn-share-img">${t('share')}${ic.share}</button>
             <button class="btn ghost" data-action="again" id="btn-again">${ic.again}${t('takeAgain')}</button>
@@ -694,18 +785,95 @@ function updatePick() {
   drawPreview();
 }
 
+function renderStyleFrameThumbnails() {
+  const canvases = document.querySelectorAll('.style-frame-card-canvas');
+  if (!canvases.length) return;
+  const layout = st().layout || '4cut';
+  canvases.forEach((canvas) => {
+    try {
+      const fid = canvas.dataset.frameId;
+      if (canvas.dataset.renderedLayout === layout && canvas.dataset.renderedFrame === fid) return;
+      canvas.dataset.renderedLayout = layout;
+      canvas.dataset.renderedFrame = fid;
+      renderFramePreview(canvas, fid, layout, 85);
+    } catch (e) {
+      console.error('Style thumbnail error:', e);
+    }
+  });
+}
+
+function updateLiveOverlay() {
+  const overlay = document.getElementById('live-overlay');
+  const btns = document.querySelectorAll('.live-pill-toggle');
+  btns.forEach((btn) => btn.classList.toggle('active', !!S.liveMode));
+  if (!overlay) return;
+  overlay.classList.toggle('active', !!S.liveMode);
+  if (!S.liveMode) {
+    overlay.innerHTML = '';
+    return;
+  }
+  const s = st();
+  const slots = slotsOf(s.layout);
+  const { width: W, height: H, cellW, cellH, L } = stripSize(s.layout);
+  const filterObj = FILTERS.find((f) => f.id === s.filter);
+  const filterCss = filterObj?.css || 'none';
+
+  overlay.innerHTML = '';
+  for (let k = 0; k < slots; k++) {
+    const shotIdx = s.picks?.[k];
+    const clipUrl = shotIdx != null ? S.liveClips[shotIdx] : null;
+    const col = k % L.cols;
+    const row = Math.floor(k / L.cols);
+    const x = L.pad + col * (cellW + L.gap);
+    const y = L.pad + row * (cellH + L.gap);
+
+    const slotDiv = document.createElement('div');
+    slotDiv.className = 'live-slot';
+    slotDiv.style.left = `${(x / W) * 100}%`;
+    slotDiv.style.top = `${(y / H) * 100}%`;
+    slotDiv.style.width = `${(cellW / W) * 100}%`;
+    slotDiv.style.height = `${(cellH / H) * 100}%`;
+    slotDiv.style.borderRadius = `${(Math.round(W * 0.015) / W) * 100}%`;
+
+    if (clipUrl) {
+      const v = document.createElement('video');
+      v.src = clipUrl;
+      v.autoplay = true;
+      v.loop = true;
+      v.muted = true;
+      v.setAttribute('playsinline', '');
+      v.style.filter = filterCss;
+      slotDiv.append(v);
+      v.play().catch(() => {});
+    }
+    overlay.append(slotDiv);
+  }
+}
+
 function updateStyle() {
   const s = st();
   document.querySelectorAll('[data-action="filter"]').forEach((b) => b.classList.toggle('active', b.dataset.filter === s.filter));
   document.querySelectorAll('[data-action="color"]').forEach((b) => b.classList.toggle('active', b.dataset.color === s.frameColor));
-  document.querySelectorAll('.mini-frame-chip').forEach((b) => b.classList.toggle('active', b.dataset.frame === (s.frameId || 'hearts')));
+  document.querySelectorAll('.style-frame-card').forEach((b) => b.classList.toggle('selected', b.dataset.frame === (s.frameId || 'hearts')));
+  document.querySelectorAll('.style-cat-pill').forEach((b) => b.classList.toggle('active', b.dataset.cat === (S.styleFrameCat || 'all')));
+  document.querySelectorAll('[data-action="layout"]').forEach((b) => b.classList.toggle('active', b.dataset.layout === s.layout));
+
+  const nameEl = document.getElementById('style-frame-name');
+  if (nameEl) {
+    const curFrame = getFrame(s.frameId || 'hearts');
+    nameEl.textContent = curFrame?.name || '';
+  }
+
   const cap = document.getElementById('caption-input');
   if (cap && document.activeElement !== cap) cap.value = s.caption || '';
   const dt = document.getElementById('date-toggle');
   if (dt) dt.checked = !!s.showDate;
   const ci = document.getElementById('color-input');
   if (ci && document.activeElement !== ci) ci.value = s.frameColor;
+  
+  renderStyleFrameThumbnails();
   drawPreview();
+  updateLiveOverlay();
 }
 
 function stripOpts() {
@@ -752,7 +920,10 @@ async function drawFinal() {
   S.finalBlob = blob;
   if (img.src) URL.revokeObjectURL(img.src);
   img.src = URL.createObjectURL(blob);
-  img.onload = () => img.parentElement?.classList.add('ready');
+  img.onload = () => {
+    img.parentElement?.classList.add('ready');
+    updateLiveOverlay();
+  };
 }
 
 /* =========================================================
@@ -887,6 +1058,8 @@ function onState() {
     if (phase === 'frame') {
       S.shots = [];
       S.participants = [];
+      S.liveClips = [];
+      S.liveBlobs = [];
       clearImgCache();
     }
     render();
@@ -898,6 +1071,8 @@ function onEvent(ev, data, from) {
     S.shots = Array.from({ length: data.total }, () => ({}));
     S.participants = data.participants;
     S.shooting = true;
+    S.liveClips = [];
+    S.liveBlobs = [];
     clearImgCache();
     const thumbs = document.getElementById('thumbs');
     if (thumbs) thumbs.innerHTML = '';
@@ -936,6 +1111,13 @@ async function hostRunShoot() {
 
 async function runCountdown({ i, secs }) {
   const get = () => document.getElementById('countdown');
+
+  // Trigger live photo video recording
+  let livePromise = null;
+  if (S.stream && isLivePhotoSupported()) {
+    livePromise = recordLiveClip(S.stream, (secs + 0.8) * 1000);
+  }
+
   for (let s = secs; s > 0; s--) {
     const el = get();
     if (el) {
@@ -958,6 +1140,16 @@ async function runCountdown({ i, secs }) {
     fl.classList.add('go');
   }
   S.room.send('photo', { i, src });
+
+  if (livePromise) {
+    livePromise.then((res) => {
+      if (res && res.url) {
+        S.liveClips[i] = res.url;
+        S.liveBlobs[i] = res.blob;
+        S.liveMode = true;
+      }
+    });
+  }
 }
 
 function gotoPhase(phase) {
@@ -976,7 +1168,7 @@ function leave() {
   stopStream(S.stream);
   videos.forEach((v) => (v.srcObject = null));
   videos.clear();
-  Object.assign(S, { room: null, stream: null, shots: [], participants: [], shooting: false, finalBlob: null });
+  Object.assign(S, { room: null, stream: null, shots: [], liveClips: [], liveBlobs: [], participants: [], shooting: false, finalBlob: null });
   go('home');
 }
 
@@ -992,7 +1184,6 @@ const actions = {
   lang: () => {
     setLang(getLang() === 'id' ? 'en' : 'id');
     if (S.view === 'session') {
-      // re-render keeps canvases fresh; pick thumbs re-draw from cache
       render();
     } else render();
   },
@@ -1030,11 +1221,130 @@ const actions = {
     S.activeFrameCat = el.dataset.cat;
     render();
   },
+  'style-cat': (el) => {
+    S.styleFrameCat = el.dataset.cat;
+    render();
+  },
   'pick-frame': (el) => {
     S.room?.setState({ frameId: el.dataset.frame });
   },
+  'toggle-live': () => {
+    if (!S.liveClips.some(Boolean)) {
+      toast(t('liveHelp'));
+      return;
+    }
+    S.liveMode = !S.liveMode;
+    updateLiveOverlay();
+  },
+  'download-live': async (el) => {
+    if (!S.liveClips.some(Boolean)) {
+      toast(t('liveHelp'));
+      return;
+    }
+    const origHtml = el.innerHTML;
+    el.disabled = true;
+    el.innerHTML = `<span class="spinner sm"></span> <span>${t('generatingLive')}</span>`;
+
+    try {
+      const s = st();
+      const { width: W, height: H, cellW, cellH, L } = stripSize(s.layout);
+      const slots = slotsOf(s.layout);
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = W;
+      offCanvas.height = H;
+      const ctx = offCanvas.getContext('2d');
+
+      const vEls = await Promise.all(
+        Array.from({ length: slots }, async (_, k) => {
+          const shotIdx = s.picks?.[k];
+          const clipUrl = shotIdx != null ? S.liveClips[shotIdx] : null;
+          if (!clipUrl) return null;
+          const v = document.createElement('video');
+          v.src = clipUrl;
+          v.muted = true;
+          v.loop = true;
+          v.playsInline = true;
+          await new Promise((res) => {
+            v.onloadeddata = () => res(v);
+            v.onerror = () => res(null);
+            setTimeout(() => res(v), 900);
+          });
+          v.currentTime = 0;
+          v.play().catch(() => {});
+          return v;
+        })
+      );
+
+      const staticOpts = stripOpts();
+      const staticCanvas = document.createElement('canvas');
+      await renderStrip(staticCanvas, staticOpts);
+
+      const filterObj = FILTERS.find((f) => f.id === s.filter);
+      const radius = s.theme === 'vintage' ? 0 : Math.round(W * 0.015);
+
+      const blob = await recordCanvasVideo(
+        offCanvas,
+        () => {
+          ctx.drawImage(staticCanvas, 0, 0);
+
+          for (let k = 0; k < slots; k++) {
+            const v = vEls[k];
+            if (!v || v.readyState < 2) continue;
+            const col = k % L.cols;
+            const row = Math.floor(k / L.cols);
+            const x = L.pad + col * (cellW + L.gap);
+            const y = L.pad + row * (cellH + L.gap);
+
+            ctx.save();
+            roundRect(ctx, x, y, cellW, cellH, radius);
+            ctx.clip();
+            if (filterObj && filterObj.id !== 'none' && filterObj.css) {
+              ctx.filter = filterObj.css;
+            }
+            drawCover(ctx, v, x, y, cellW, cellH);
+            ctx.restore();
+          }
+        },
+        3600,
+        30
+      );
+
+      if (blob) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        const d = new Date();
+        a.download = `phoboots-live-${s.layout}-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.webm`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+        toast('Live Video downloaded! 📹✨');
+      } else {
+        toast('Video recording not supported on this device');
+      }
+    } catch (err) {
+      console.error(err);
+      toast('Error rendering video');
+    } finally {
+      el.disabled = false;
+      el.innerHTML = origHtml;
+    }
+  },
   layout: (el) => {
-    if (st().layout !== el.dataset.layout) S.room.setState({ layout: el.dataset.layout, picks: [] });
+    const newLayout = el.dataset.layout;
+    if (st().layout !== newLayout) {
+      const slots = slotsOf(newLayout);
+      let picks = [...(st().picks || [])];
+      if (picks.length > slots) {
+        picks = picks.slice(0, slots);
+      } else if (picks.length < slots) {
+        for (let i = 0; i < S.shots.length && picks.length < slots; i++) {
+          if (!picks.includes(i)) picks.push(i);
+        }
+      }
+      S.room.setState({ layout: newLayout, picks });
+      if (st().phase === 'style') {
+        render();
+      }
+    }
   },
   goto: (el) => gotoPhase(el.dataset.phase),
   back: () => {

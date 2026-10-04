@@ -1012,8 +1012,8 @@ export const FRAME_TEMPLATES = [
     name: 'Matte Black',
     textColor: '#f2f2f2',
     bgColor: '#151518',
-    draw: (ctx, w, h) => {
-      ctx.fillStyle = '#151518';
+    draw: (ctx, w, h, L, customColor) => {
+      ctx.fillStyle = customColor || '#151518';
       ctx.fillRect(0, 0, w, h);
     },
   },
@@ -1023,8 +1023,8 @@ export const FRAME_TEMPLATES = [
     name: 'Pure White',
     textColor: '#1a1a1a',
     bgColor: '#ffffff',
-    draw: (ctx, w, h) => {
-      ctx.fillStyle = '#ffffff';
+    draw: (ctx, w, h, L, customColor) => {
+      ctx.fillStyle = customColor || '#ffffff';
       ctx.fillRect(0, 0, w, h);
       ctx.strokeStyle = '#e6e6e6';
       ctx.lineWidth = 1;
@@ -1037,8 +1037,8 @@ export const FRAME_TEMPLATES = [
     name: 'Warm Beige',
     textColor: '#423326',
     bgColor: '#f5eee6',
-    draw: (ctx, w, h) => {
-      ctx.fillStyle = '#f5ede4';
+    draw: (ctx, w, h, L, customColor) => {
+      ctx.fillStyle = customColor || '#f5ede4';
       ctx.fillRect(0, 0, w, h);
     },
   },
@@ -1048,8 +1048,8 @@ export const FRAME_TEMPLATES = [
     name: 'Soft Pink',
     textColor: '#853e50',
     bgColor: '#ffe6ee',
-    draw: (ctx, w, h) => {
-      ctx.fillStyle = '#ffe5ee';
+    draw: (ctx, w, h, L, customColor) => {
+      ctx.fillStyle = customColor || '#ffe5ee';
       ctx.fillRect(0, 0, w, h);
     },
   },
@@ -1059,8 +1059,8 @@ export const FRAME_TEMPLATES = [
     name: 'Sage Mist',
     textColor: '#294331',
     bgColor: '#e3ece4',
-    draw: (ctx, w, h) => {
-      ctx.fillStyle = '#e4ece5';
+    draw: (ctx, w, h, L, customColor) => {
+      ctx.fillStyle = customColor || '#e4ece5';
       ctx.fillRect(0, 0, w, h);
     },
   },
@@ -1070,8 +1070,8 @@ export const FRAME_TEMPLATES = [
     name: 'Graphite',
     textColor: '#f5f5f7',
     bgColor: '#2a2a30',
-    draw: (ctx, w, h) => {
-      ctx.fillStyle = '#29292f';
+    draw: (ctx, w, h, L, customColor) => {
+      ctx.fillStyle = customColor || '#29292f';
       ctx.fillRect(0, 0, w, h);
     },
   },

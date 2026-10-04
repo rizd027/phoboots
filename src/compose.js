@@ -38,7 +38,7 @@ function luminance(hex) {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 }
 
-function roundRect(ctx, x, y, w, h, r) {
+export function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -48,7 +48,7 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function drawCover(ctx, img, x, y, w, h) {
+export function drawCover(ctx, img, x, y, w, h) {
   const ir = img.width / img.height;
   const r = w / h;
   let sw, sh, sx, sy;
@@ -313,7 +313,7 @@ export async function renderStrip(canvas, opts) {
 
   // If a decorative frame exists, draw its artwork
   if (frame) {
-    frame.draw(ctx, W, H, L);
+    frame.draw(ctx, W, H, L, frameColor);
   } else {
     ctx.fillStyle = frameColor || '#ffffff';
     ctx.fillRect(0, 0, W, H);
