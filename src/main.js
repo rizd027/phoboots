@@ -736,8 +736,26 @@ function afterRender() {
   }
 }
 
+let wakeLockObj = null;
+async function acquireWakeLock() {
+  try {
+    if ('wakeLock' in navigator && !wakeLockObj) {
+      wakeLockObj = await navigator.wakeLock.request('screen');
+      wakeLockObj.addEventListener('release', () => { wakeLockObj = null; });
+    }
+  } catch {}
+}
+function releaseWakeLock() {
+  if (wakeLockObj) {
+    wakeLockObj.release().catch(() => {});
+    wakeLockObj = null;
+  }
+}
+
 function go(view) {
   S.view = view;
+  if (['lobby', 'session'].includes(view)) acquireWakeLock();
+  else releaseWakeLock();
   render();
   window.scrollTo(0, 0);
 }
@@ -1860,7 +1878,20 @@ app.addEventListener('submit', (e) => {
   joinRoom(code);
 });
 
-window.addEventListener('beforeunload', () => S.room?.leave());
+window.addEventListener('beforeunload', () => {
+  releaseWakeLock();
+  S.room?.leave();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    if (['lobby', 'session'].includes(S.view)) acquireWakeLock();
+    if (S.room?.peer && S.room.peer.disconnected && !S.room.peer.destroyed) {
+      console.log('[room] Reconnecting peer on tab focus...');
+      try { S.room.peer.reconnect(); } catch {}
+    }
+  }
+});
 
 /* =========================================================
    Boot
