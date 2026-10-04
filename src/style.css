@@ -536,8 +536,9 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 18px 20px;
-  border-radius: 12px;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
   text-align: left;
@@ -545,10 +546,12 @@ a {
 }
 .cta-btn b {
   font-size: 16px;
+  white-space: nowrap;
 }
 .cta-btn span {
   font-size: 13px;
   color: var(--muted);
+  white-space: nowrap;
 }
 .cta-btn.primary {
   background: var(--primary);
@@ -2922,10 +2925,11 @@ body[data-theme='neon'] .lay-art {
     order: 1;
   }
   .hero-art {
-    height: 340px;
-    max-width: 340px;
+    height: auto;
+    max-width: 280px;
     margin: 0 auto;
     order: 2;
+    overflow: visible;
   }
   .nav-links {
     display: none;
@@ -2933,10 +2937,6 @@ body[data-theme='neon'] .lay-art {
   .booths,
   .layout-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-  .home-frames-showcase {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 14px;
   }
   .how-grid {
     grid-template-columns: 1fr;
@@ -3142,51 +3142,152 @@ body[data-theme='neon'] .lay-art {
     opacity: 1;
   }
 
-  /* Landing Hero */
+  /* Landing Hero (Mobile) */
+  .header {
+    padding: 14px 16px;
+  }
   .hero {
-    padding: 20px 0 16px;
-    gap: 20px;
+    padding: 14px 0 20px;
+    gap: 16px;
+    text-align: center;
   }
   .hero-copy {
     order: 1;
-    gap: 14px;
+    width: 100%;
+    align-items: center;
+    text-align: center;
   }
-  .hero-copy .title {
-    font-size: clamp(26px, 7.5vw, 36px);
+  .hero-copy .pill {
+    padding: 5px 12px;
+    font-size: 11px;
   }
-  .hero-actions {
+  .hero h1,
+  .hero-copy h1 {
+    font-size: clamp(26px, 7.2vw, 34px);
+    line-height: 1.1;
+    margin: 12px 0 10px;
+    font-weight: 800;
+  }
+  .hero .lead,
+  .hero-copy .lead {
+    font-size: 13.5px;
+    line-height: 1.5;
+    color: var(--muted);
+    max-width: 320px;
+    margin: 0 auto;
+  }
+  .cta {
+    display: flex;
     flex-direction: column;
     width: 100%;
-    max-width: 300px;
+    max-width: 320px;
+    margin: 18px auto 0;
     gap: 10px;
-    margin-top: 4px;
   }
-  .hero-actions .btn {
+  .cta-btn {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-radius: 14px;
     width: 100%;
-    height: 50px;
+  }
+  .cta-btn b {
     font-size: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .cta-btn span {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .chips {
     justify-content: center;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .chip {
+    font-size: 12px;
+    padding: 6px 14px;
   }
   .hero-art {
     order: 2;
-    height: 260px;
-    max-width: 280px;
-    margin: 4px auto 0;
+    position: relative;
+    width: 100%;
+    max-width: 220px;
+    height: auto;
+    min-height: auto;
+    margin: 16px auto 0;
+    padding-bottom: 24px;
+    overflow: visible;
+    display: flex;
+    justify-content: center;
+  }
+  .hanger {
+    margin: 0 auto;
+  }
+  .hanger-bar {
+    width: 160px;
+    height: 12px;
+    border-radius: 6px;
+  }
+  .hang-strip {
+    width: 180px;
+    max-width: 75vw;
+    height: auto;
+    margin-top: -6px;
+    border-radius: 4px;
+    filter: drop-shadow(0 14px 24px rgba(40, 20, 60, 0.16));
   }
   .float-card {
     display: none !important;
   }
-  .home-frames-showcase {
-    grid-template-columns: repeat(2, 1fr);
+  .section {
+    padding: 36px 0;
+  }
+  .section h2 {
+    font-size: 24px;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .how-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    max-width: 340px;
+    margin: 0 auto;
+  }
+  .how-card {
+    padding: 18px 20px;
+    border-radius: 16px;
+  }
+  .how-card h3 {
+    font-size: 17px;
+    margin: 8px 0 4px;
+  }
+  .how-card p {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .faq {
+    max-width: 360px;
+    margin: 0 auto;
+  }
+  .faq details {
+    padding: 12px 0;
+  }
+  .faq summary {
+    font-size: 15px;
+  }
+  .faq p {
+    font-size: 13px;
+    padding: 8px 0 4px;
+  }
+  .footer {
+    padding: 28px 16px;
+    flex-direction: column;
     gap: 10px;
-  }
-  .home-frame-card {
-    padding: 8px 6px;
-    border-radius: 12px;
-    gap: 6px;
-  }
-  .home-frame-name {
-    font-size: 11px;
+    text-align: center;
   }
 
   /* Join & Name Fields */

@@ -149,7 +149,6 @@ function homeView() {
     ${logo()}
     <nav class="nav-links">
       <a href="#how">${t('navHow')}</a>
-      <a href="#booths">${t('navBooths')}</a>
       <a href="#faq">${t('navFaq')}</a>
     </nav>
     ${langBtn()}
@@ -203,12 +202,6 @@ function homeView() {
       </div>
     </section>
 
-    <section id="booths" class="container section">
-      <h2>${t('pickFrame')}</h2>
-      <p class="sub" style="text-align:center;margin-top:-8px;margin-bottom:28px;">37+ Aesthetic Korean Photobooth Frames</p>
-      ${homeFramesGallery()}
-    </section>
-
     <section id="faq" class="container section faq">
       <h2>${t('faqTitle')}</h2>
       ${[1, 2, 3]
@@ -221,24 +214,6 @@ function homeView() {
     ${logo()}
     <span>© ${new Date().getFullYear()} <b>PhoBoots</b> · ${t('createdBy')} <a href="https://github.com/rizddf" target="_blank" rel="noopener noreferrer" class="footer-author">rizddf</a></span>
   </footer>`;
-}
-
-function homeFramesGallery() {
-  const featured = ['hearts', 'denim_stars', 'teddy', 'boba', 'tulips', 'vintage_curtain', 'disco', 'botanical'];
-  return `<div class="home-frames-showcase">
-    ${featured
-      .map((id) => {
-        const f = getFrame(id);
-        return `
-        <div class="home-frame-card">
-          <div class="home-frame-canvas-holder">
-            <canvas class="home-frame-canvas" data-frame-id="${f.id}"></canvas>
-          </div>
-          <span class="home-frame-name">${f.name}</span>
-        </div>`;
-      })
-      .join('')}
-  </div>`;
 }
 
 function boothView() {
@@ -713,11 +688,6 @@ function render() {
 }
 
 function afterRender() {
-  if (S.view === 'home') {
-    document.querySelectorAll('.home-frame-canvas').forEach((c) => {
-      renderFramePreview(c, c.dataset.frameId, '4cut', 130);
-    });
-  }
   if (S.view === 'lobby') updateLobby();
   if (S.view === 'session') {
     S.lastPhase = st().phase;
