@@ -229,14 +229,73 @@ function decorateCell(ctx, x, y, w, h, i, themeId) {
   }
 }
 
+import { getFrame } from './frames.js';
+
+/**
+ * Render a thumbnail preview of a frame template with empty white photo cutout boxes,
+ * identical to getangie.com photobooth gallery.
+ */
+export function renderFramePreview(canvas, frameId, layoutId = '4cut', width = 160) {
+  const frame = getFrame(frameId);
+  const { width: W, height: H, cellW, cellH, L } = stripSize(layoutId);
+  const scale = width / W;
+  const targetH = Math.round(H * scale);
+
+  canvas.width = width;
+  canvas.height = targetH;
+  const ctx = canvas.getContext('2d');
+  ctx.save();
+  ctx.scale(scale, scale);
+
+  // Draw decorative background
+  frame.draw(ctx, W, H, L);
+
+  // Draw clean white photo boxes
+  const radius = Math.round(W * 0.015);
+  for (let i = 0; i < slotsOf(layoutId); i++) {
+    const col = i % L.cols;
+    const row = Math.floor(i / L.cols);
+    const x = L.pad + col * (cellW + L.gap);
+    const y = L.pad + row * (cellH + L.gap);
+
+    ctx.save();
+    roundRect(ctx, x, y, cellW, cellH, radius);
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+    ctx.fill();
+    ctx.restore();
+
+    // subtle inner border
+    ctx.save();
+    roundRect(ctx, x, y, cellW, cellH, radius);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Footer mini logo
+  const gridBottom = L.pad + L.rows * cellH + (L.rows - 1) * L.gap;
+  ctx.fillStyle = frame.textColor || '#16161b';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = `800 ${Math.round(W * 0.052)}px Inter, sans-serif`;
+  ctx.fillText('phoboots', W / 2, gridBottom + L.footer * 0.48);
+
+  ctx.restore();
+}
+
 /**
  * Render the full strip.
  * cells: array (length = slots) of photo arrays ([{ name, src }]) or null for empty slots.
  */
 export async function renderStrip(canvas, opts) {
-  const { layoutId, themeId, cells, filter, frameColor, caption, showDate } = opts;
+  const { layoutId, themeId, frameId = 'hearts', cells, filter, frameColor, caption, showDate } = opts;
+  const frame = getFrame(frameId);
   const { width: W, height: H, cellW, cellH, L } = stripSize(layoutId);
-  const font = themeId === 'vintage' ? 'Fraunces' : 'Inter';
+  const font = frame.font || (themeId === 'vintage' ? 'Fraunces' : 'Inter');
   try {
     await document.fonts.load(`700 40px ${font}`);
   } catch {
@@ -246,11 +305,17 @@ export async function renderStrip(canvas, opts) {
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = frameColor;
-  ctx.fillRect(0, 0, W, H);
-  decorateBackground(ctx, W, H, themeId, frameColor);
 
-  const radius = themeId === 'vintage' ? 0 : Math.round(W * 0.012);
+  // If a decorative frame exists, draw its artwork
+  if (frame) {
+    frame.draw(ctx, W, H, L);
+  } else {
+    ctx.fillStyle = frameColor || '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    decorateBackground(ctx, W, H, themeId, frameColor || '#ffffff');
+  }
+
+  const radius = themeId === 'vintage' ? 0 : Math.round(W * 0.015);
   const rendered = await Promise.all(
     cells.map((photos, i) => (photos ? drawCell(cellW, cellH, photos, filter, i + 11) : null))
   );
@@ -261,20 +326,35 @@ export async function renderStrip(canvas, opts) {
     const x = L.pad + col * (cellW + L.gap);
     const y = L.pad + row * (cellH + L.gap);
     decorateCell(ctx, x, y, cellW, cellH, i, themeId);
+
+    // Box shadow for photo cutouts
+    ctx.save();
+    roundRect(ctx, x, y, cellW, cellH, radius);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.restore();
+
     ctx.save();
     roundRect(ctx, x, y, cellW, cellH, radius);
     ctx.clip();
-    if (cell) ctx.drawImage(cell, x, y, cellW, cellH);
-    else {
-      ctx.fillStyle = luminance(frameColor) < 0.45 ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.07)';
+    if (cell) {
+      ctx.drawImage(cell, x, y, cellW, cellH);
+    } else {
+      // Empty white box
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(x, y, cellW, cellH);
+      ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x, y, cellW, cellH);
     }
     ctx.restore();
   });
 
   // footer
-  const dark = luminance(frameColor) < 0.45;
-  const ink = dark ? '#f6f1e7' : '#1b1b20';
+  const ink = frame?.textColor || (luminance(frameColor || '#ffffff') < 0.45 ? '#f6f1e7' : '#1b1b20');
   const gridBottom = L.pad + L.rows * cellH + (L.rows - 1) * L.gap;
   const base = Math.min(W, 900);
   const capSize = Math.round(base * (layoutId === '4cut' ? 0.068 : 0.05));
@@ -284,15 +364,15 @@ export async function renderStrip(canvas, opts) {
   ctx.fillStyle = ink;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `${themeId === 'vintage' ? 'italic 600' : '800'} ${capSize}px ${font}, sans-serif`;
-  if (themeId === 'neon') {
+  ctx.font = `${font === 'Fraunces' ? 'italic 600' : '800'} ${capSize}px ${font}, sans-serif`;
+  if (themeId === 'neon' || frameId === 'pixel_arcade') {
     ctx.shadowColor = '#ff4fd8';
     ctx.shadowBlur = 16;
   }
   ctx.fillText(text, W / 2, cy);
   ctx.shadowBlur = 0;
 
-  if (themeId === 'classic') {
+  if (themeId === 'classic' && !frameId) {
     const tw = ctx.measureText(text).width;
     const r = capSize * 0.16;
     ctx.fillStyle = '#ff7aa8';
@@ -308,9 +388,12 @@ export async function renderStrip(canvas, opts) {
   if (showDate) {
     const d = new Date();
     const ds = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-    ctx.fillStyle = dark ? 'rgba(246,241,231,.7)' : 'rgba(27,27,32,.6)';
+    ctx.fillStyle = ink;
+    ctx.globalAlpha = 0.7;
     ctx.font = `500 ${Math.round(capSize * 0.42)}px 'JetBrains Mono', monospace`;
     ctx.fillText(ds, W / 2, gridBottom + L.footer * 0.72);
+    ctx.globalAlpha = 1.0;
   }
   return canvas;
 }
+

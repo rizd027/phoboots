@@ -3,7 +3,8 @@ import { t, getLang, setLang } from './i18n.js';
 import { THEMES, LAYOUTS, FILTERS, slotsOf, shotsOf, MAX_MEMBERS } from './config.js';
 import { Room } from './room.js';
 import { getCamera, stopStream, captureFrame } from './camera.js';
-import { renderStrip, renderShotThumb, clearImgCache } from './compose.js';
+import { renderStrip, renderShotThumb, renderFramePreview, clearImgCache } from './compose.js';
+import { FRAME_CATEGORIES, FRAME_TEMPLATES, getFrame } from './frames.js';
 
 /* =========================================================
    App state
@@ -18,6 +19,7 @@ const S = {
   joinCode: '',
   joinError: '',
   joining: false,
+  activeFrameCat: 'patterns',
   shots: [], // [{ [peerId]: dataURL }]
   participants: [], // [{ id, name }] snapshot at shoot start
   shooting: false,
@@ -315,22 +317,60 @@ function sessionView() {
 function phaseView(phase) {
   const s = st();
   switch (phase) {
-    case 'frame':
+    case 'frame': {
+      const curCat = S.activeFrameCat || 'patterns';
+      const framesInCat = FRAME_TEMPLATES.filter((f) => f.cat === curCat);
+      const activeFrameId = s.frameId || 'hearts';
+
       return `
-      <section class="phase-inner">
-        <h1 class="title display">${t('pickSize')}</h1>
-        <p class="sub">${t('pickSizeDesc')}</p>
-        <div class="layout-grid">
+      <section class="phase-inner frame-picker-view">
+        <div class="frame-picker-header">
+          <h1 class="title display">${t('pickFrame')}</h1>
+          <p class="sub">${t('pickFrameDesc')}</p>
+        </div>
+
+        <!-- Category tabs with badges -->
+        <div class="frame-cats-wrap">
+          <div class="frame-cats">
+            ${FRAME_CATEGORIES.map(
+              (cat) => `
+              <button class="frame-cat-pill ${curCat === cat.id ? 'active' : ''}" data-action="frame-cat" data-cat="${cat.id}" id="cat-${cat.id}">
+                <span class="cat-icon">${cat.icon}</span>
+                <span class="cat-name">${cat.label}</span>
+                ${cat.badge ? `<span class="cat-badge ${cat.badge.includes('NEW') ? 'badge-new' : ''}">${cat.badge}</span>` : ''}
+              </button>`
+            ).join('')}
+          </div>
+        </div>
+
+        <!-- Format switch pills -->
+        <div class="layout-switch-bar">
+          <span class="layout-switch-label">Format:</span>
           ${LAYOUT_IDS.map(
-            (id, i) => `
-            <button class="layout-card ${s.layout === id ? 'selected' : ''}" style="--d:${i * 60}ms" data-action="layout" data-layout="${id}" id="layout-${id}">
-              <div class="lay-art lay-${id}">${'<i></i>'.repeat(slotsOf(id))}</div>
-              <b>${t('l' + id)}</b><span>${t('l' + id + 'D')}</span>
+            (id) => `
+            <button class="layout-pill ${s.layout === id ? 'selected' : ''}" data-action="layout" data-layout="${id}" id="layout-${id}">
+              ${t('l' + id)}
             </button>`
           ).join('')}
         </div>
+
+        <!-- Grid of decorative frames -->
+        <div class="frame-cards-grid layout-${s.layout}">
+          ${framesInCat.map(
+            (f) => `
+            <button class="frame-card-item ${activeFrameId === f.id ? 'selected' : ''}" data-action="pick-frame" data-frame="${f.id}" id="frame-card-${f.id}">
+              <div class="frame-canvas-holder">
+                <canvas class="frame-card-canvas" data-frame-id="${f.id}" data-layout="${s.layout}"></canvas>
+                <span class="frame-check-badge">✓</span>
+              </div>
+              <span class="frame-card-title">${f.name}</span>
+            </button>`
+          ).join('')}
+        </div>
+
         <button class="ticket" data-action="goto" data-phase="shoot" id="btn-next"><span>${t('next')}</span></button>
       </section>`;
+    }
 
     case 'shoot': {
       const total = S.shooting ? S.shots.length : shotsOf(s.layout);
@@ -377,11 +417,26 @@ function phaseView(phase) {
 
     case 'style': {
       const th = THEMES[s.theme];
+      const curFrame = getFrame(s.frameId || 'hearts');
       return `
       <section class="phase-inner split reverse">
         <aside class="preview-col"><canvas id="preview" class="strip-preview layout-${s.layout}"></canvas></aside>
         <div class="split-main style-panel glass">
           <h1 class="title display">${t('styleTitle')}</h1>
+          
+          <div class="field">
+            <label>${t('pickFrame')}: <b>${curFrame.name}</b></label>
+            <div class="mini-frame-row">
+              ${FRAME_TEMPLATES.map(
+                (f) => `
+                <button class="mini-frame-chip ${s.frameId === f.id ? 'active' : ''}" data-action="pick-frame" data-frame="${f.id}" title="${f.name}">
+                  <span class="mfc-dot" style="background:${f.bgColor}"></span>
+                  <span>${f.name}</span>
+                </button>`
+              ).join('')}
+            </div>
+          </div>
+
           <div class="field">
             <label>${t('filter')}</label>
             <div class="chip-row">
@@ -391,6 +446,7 @@ function phaseView(phase) {
               ).join('')}
             </div>
           </div>
+
           <div class="field">
             <label>${t('frameColor')}</label>
             <div class="swatches">
@@ -403,14 +459,17 @@ function phaseView(phase) {
               <label class="swatch custom" title="Custom"><input type="color" id="color-input" value="${s.frameColor}" /></label>
             </div>
           </div>
+
           <div class="field">
             <label for="caption-input">${t('caption')}</label>
             <input class="input" id="caption-input" maxlength="40" placeholder="${t('captionPh')}" value="${esc(s.caption)}" />
           </div>
+
           <label class="toggle">
             <input type="checkbox" id="date-toggle" ${s.showDate ? 'checked' : ''} />
             <span class="track"></span>${t('showDate')}
           </label>
+
           <button class="ticket" data-action="goto" data-phase="done" id="btn-next"><span>${t('next')}</span></button>
         </div>
       </section>`;
@@ -537,12 +596,29 @@ function updateLobby() {
 
 /* ---------- phase updates (partial, keeps focus & videos) ---------- */
 
+function renderFrameThumbnails() {
+  const canvases = document.querySelectorAll('.frame-card-canvas');
+  if (!canvases.length) return;
+  const layout = st().layout || '4cut';
+  canvases.forEach((canvas) => {
+    const fid = canvas.dataset.frameId;
+    if (canvas.dataset.renderedLayout === layout && canvas.dataset.renderedFrame === fid) return;
+    canvas.dataset.renderedLayout = layout;
+    canvas.dataset.renderedFrame = fid;
+    renderFramePreview(canvas, fid, layout, 130);
+  });
+}
+
 function updatePhase() {
   const s = st();
   switch (s.phase) {
-    case 'frame':
-      document.querySelectorAll('.layout-card').forEach((c) => c.classList.toggle('selected', c.dataset.layout === s.layout));
+    case 'frame': {
+      document.querySelectorAll('.layout-pill').forEach((c) => c.classList.toggle('selected', c.dataset.layout === s.layout));
+      document.querySelectorAll('.frame-cat-pill').forEach((c) => c.classList.toggle('active', c.dataset.cat === (S.activeFrameCat || 'patterns')));
+      document.querySelectorAll('.frame-card-item').forEach((c) => c.classList.toggle('selected', c.dataset.frame === (s.frameId || 'hearts')));
+      renderFrameThumbnails();
       break;
+    }
     case 'shoot':
       updateShoot();
       break;
@@ -618,6 +694,7 @@ function updateStyle() {
   const s = st();
   document.querySelectorAll('[data-action="filter"]').forEach((b) => b.classList.toggle('active', b.dataset.filter === s.filter));
   document.querySelectorAll('[data-action="color"]').forEach((b) => b.classList.toggle('active', b.dataset.color === s.frameColor));
+  document.querySelectorAll('.mini-frame-chip').forEach((b) => b.classList.toggle('active', b.dataset.frame === (s.frameId || 'hearts')));
   const cap = document.getElementById('caption-input');
   if (cap && document.activeElement !== cap) cap.value = s.caption || '';
   const dt = document.getElementById('date-toggle');
@@ -637,6 +714,7 @@ function stripOpts() {
   return {
     layoutId: s.layout,
     themeId: s.theme,
+    frameId: s.frameId || 'hearts',
     cells,
     filter: s.filter,
     frameColor: s.frameColor,
@@ -682,6 +760,7 @@ function initialState(theme, phase) {
     phase,
     theme,
     layout: '4cut',
+    frameId: 'hearts',
     picks: [],
     filter: th.defaultFilter,
     frameColor: th.frameColors[0],
@@ -943,6 +1022,13 @@ const actions = {
   },
   'start-session': () => S.room.setState({ phase: 'frame' }),
   leave: () => leave(),
+  'frame-cat': (el) => {
+    S.activeFrameCat = el.dataset.cat;
+    render();
+  },
+  'pick-frame': (el) => {
+    S.room?.setState({ frameId: el.dataset.frame });
+  },
   layout: (el) => {
     if (st().layout !== el.dataset.layout) S.room.setState({ layout: el.dataset.layout, picks: [] });
   },
