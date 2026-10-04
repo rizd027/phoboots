@@ -1349,7 +1349,15 @@ const actions = {
   goto: (el) => gotoPhase(el.dataset.phase),
   back: () => {
     const i = PHASES.indexOf(st().phase);
-    if (i > 0) gotoPhase(PHASES[i - 1] === 'shoot' && st().phase === 'pick' ? 'shoot' : PHASES[i - 1]);
+    if (i > 0) {
+      gotoPhase(PHASES[i - 1] === 'shoot' && st().phase === 'pick' ? 'shoot' : PHASES[i - 1]);
+    } else if (i === 0) {
+      if (S.room?.solo) {
+        leave();
+      } else {
+        S.room?.setState({ phase: 'lobby' });
+      }
+    }
   },
   shoot: () => (S.room.isHost ? hostRunShoot() : S.room.send('request-shoot')),
   pick: (el) => {
@@ -1393,7 +1401,13 @@ const actions = {
       navigator.share({ files: [file], title: 'Phoboots' }).catch(() => {});
     } else actions.download();
   },
-  again: () => S.room.setState({ phase: 'frame', picks: [] }),
+  again: () => {
+    S.shots = [];
+    S.liveClips = [];
+    S.liveBlobs = [];
+    clearImgCache();
+    S.room.setState({ phase: 'frame', picks: [] });
+  },
 };
 
 app.addEventListener('click', (e) => {
