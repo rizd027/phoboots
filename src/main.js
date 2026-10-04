@@ -338,6 +338,33 @@ function sessionView() {
     </header>
     <main class="phase" id="phase">${phaseView(phase)}</main>
     ${phase !== 'shoot' && !S.room.solo ? '<div class="dock" id="stage"></div>' : ''}
+    ${['pick', 'style'].includes(phase) ? `
+    <div class="preview-modal-backdrop ${S.previewExpanded ? 'open' : ''}" id="preview-modal" data-action="close-preview">
+      <div class="preview-modal-dialog" onclick="event.stopPropagation()">
+        <header class="preview-modal-bar">
+          <div class="preview-modal-title">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span>${t('fullPreview')}</span>
+          </div>
+          <div class="preview-modal-actions">
+            ${S.liveClips.some(Boolean) ? `
+              <button class="live-pill-toggle sm ${S.liveMode ? 'active' : ''}" data-action="toggle-live" title="${t('liveHelp')}">
+                <span class="live-dot"></span> <b>LIVE</b>
+              </button>` : ''}
+            <button class="icon-btn preview-modal-close" data-action="close-preview" title="${t('close')}">${ic.x}</button>
+          </div>
+        </header>
+        <div class="preview-modal-canvas-wrap">
+          <canvas id="preview-modal-canvas" class="preview-modal-canvas layout-${s.layout}"></canvas>
+          <div class="live-strip-overlay ${S.liveMode ? 'active' : ''}" id="modal-live-overlay"></div>
+        </div>
+        <div class="preview-modal-foot">
+          <button class="preview-modal-close-btn" data-action="close-preview">
+            <span>${t('tapToClose')}</span>
+          </button>
+        </div>
+      </div>
+    </div>` : ''}
   </div>`;
 }
 
@@ -459,14 +486,22 @@ function phaseView(phase) {
           </div>
         </div>
         <aside class="preview-col">
-          <div class="strip-preview-wrap layout-${s.layout}">
+          <div class="strip-preview-wrap layout-${s.layout}" data-action="expand-preview" title="${t('expandPreview')}">
             <canvas id="preview" class="strip-preview layout-${s.layout}"></canvas>
             <div class="live-strip-overlay ${S.liveMode ? 'active' : ''}" id="live-overlay"></div>
+            <button class="strip-expand-btn" data-action="expand-preview" title="${t('expandPreview')}">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              <span>${t('expand')}</span>
+            </button>
             ${S.liveClips.some(Boolean) ? `
               <button class="live-pill-toggle ${S.liveMode ? 'active' : ''}" data-action="toggle-live" title="${t('liveHelp')}">
                 <span class="live-dot"></span> <b>LIVE</b>
               </button>` : ''}
           </div>
+          <button class="mobile-expand-hint" data-action="expand-preview">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            <span>${t('tapToExpand')}</span>
+          </button>
         </aside>
       </section>`;
 
@@ -481,14 +516,22 @@ function phaseView(phase) {
       return `
       <section class="phase-inner split reverse">
         <aside class="preview-col">
-          <div class="strip-preview-wrap layout-${s.layout}">
+          <div class="strip-preview-wrap layout-${s.layout}" data-action="expand-preview" title="${t('expandPreview')}">
             <canvas id="preview" class="strip-preview layout-${s.layout}"></canvas>
             <div class="live-strip-overlay ${S.liveMode ? 'active' : ''}" id="live-overlay"></div>
+            <button class="strip-expand-btn" data-action="expand-preview" title="${t('expandPreview')}">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              <span>${t('expand')}</span>
+            </button>
             ${S.liveClips.some(Boolean) ? `
               <button class="live-pill-toggle ${S.liveMode ? 'active' : ''}" data-action="toggle-live" title="${t('liveHelp')}">
                 <span class="live-dot"></span> <b>LIVE</b>
               </button>` : ''}
           </div>
+          <button class="mobile-expand-hint" data-action="expand-preview">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+            <span>${t('tapToExpand')}</span>
+          </button>
         </aside>
 
         <div class="split-main style-panel glass">
@@ -950,51 +993,53 @@ function renderStyleFrameThumbnails() {
 }
 
 function updateLiveOverlay() {
-  const overlay = document.getElementById('live-overlay');
+  const overlays = [document.getElementById('live-overlay'), document.getElementById('modal-live-overlay')].filter(Boolean);
   const btns = document.querySelectorAll('.live-pill-toggle');
   btns.forEach((btn) => btn.classList.toggle('active', !!S.liveMode));
-  if (!overlay) return;
-  overlay.classList.toggle('active', !!S.liveMode);
-  if (!S.liveMode) {
-    overlay.innerHTML = '';
-    return;
-  }
-  const s = st();
-  const slots = slotsOf(s.layout);
-  const { width: W, height: H, cellW, cellH, L } = stripSize(s.layout);
-  const filterObj = FILTERS.find((f) => f.id === s.filter);
-  const filterCss = filterObj?.css || 'none';
-
-  overlay.innerHTML = '';
-  for (let k = 0; k < slots; k++) {
-    const shotIdx = s.picks?.[k];
-    const clipUrl = shotIdx != null ? S.liveClips[shotIdx] : null;
-    const col = k % L.cols;
-    const row = Math.floor(k / L.cols);
-    const x = L.pad + col * (cellW + L.gap);
-    const y = L.pad + row * (cellH + L.gap);
-
-    const slotDiv = document.createElement('div');
-    slotDiv.className = 'live-slot';
-    slotDiv.style.left = `${(x / W) * 100}%`;
-    slotDiv.style.top = `${(y / H) * 100}%`;
-    slotDiv.style.width = `${(cellW / W) * 100}%`;
-    slotDiv.style.height = `${(cellH / H) * 100}%`;
-    slotDiv.style.borderRadius = `${(Math.round(W * 0.015) / W) * 100}%`;
-
-    if (clipUrl) {
-      const v = document.createElement('video');
-      v.src = clipUrl;
-      v.autoplay = true;
-      v.loop = true;
-      v.muted = true;
-      v.setAttribute('playsinline', '');
-      v.style.filter = filterCss;
-      slotDiv.append(v);
-      v.play().catch(() => {});
+  if (!overlays.length) return;
+  overlays.forEach((overlay) => {
+    overlay.classList.toggle('active', !!S.liveMode);
+    if (!S.liveMode) {
+      overlay.innerHTML = '';
+      return;
     }
-    overlay.append(slotDiv);
-  }
+    const s = st();
+    const slots = slotsOf(s.layout);
+    const { width: W, height: H, cellW, cellH, L } = stripSize(s.layout);
+    const filterObj = FILTERS.find((f) => f.id === s.filter);
+    const filterCss = filterObj?.css || 'none';
+
+    overlay.innerHTML = '';
+    for (let k = 0; k < slots; k++) {
+      const shotIdx = s.picks?.[k];
+      const clipUrl = shotIdx != null ? S.liveClips[shotIdx] : null;
+      const col = k % L.cols;
+      const row = Math.floor(k / L.cols);
+      const x = L.pad + col * (cellW + L.gap);
+      const y = L.pad + row * (cellH + L.gap);
+
+      const slotDiv = document.createElement('div');
+      slotDiv.className = 'live-slot';
+      slotDiv.style.left = `${(x / W) * 100}%`;
+      slotDiv.style.top = `${(y / H) * 100}%`;
+      slotDiv.style.width = `${(cellW / W) * 100}%`;
+      slotDiv.style.height = `${(cellH / H) * 100}%`;
+      slotDiv.style.borderRadius = `${(Math.round(W * 0.015) / W) * 100}%`;
+
+      if (clipUrl) {
+        const v = document.createElement('video');
+        v.src = clipUrl;
+        v.autoplay = true;
+        v.loop = true;
+        v.muted = true;
+        v.setAttribute('playsinline', '');
+        v.style.filter = filterCss;
+        slotDiv.append(v);
+        v.play().catch(() => {});
+      }
+      overlay.append(slotDiv);
+    }
+  });
 }
 
 function updateStyle() {
@@ -1055,6 +1100,26 @@ async function drawPreview() {
   el.width = off.width;
   el.height = off.height;
   el.getContext('2d').drawImage(off, 0, 0);
+
+  const modalCanvas = document.getElementById('preview-modal-canvas');
+  if (modalCanvas) {
+    modalCanvas.width = off.width;
+    modalCanvas.height = off.height;
+    modalCanvas.getContext('2d').drawImage(off, 0, 0);
+  }
+}
+
+function syncModalPreview() {
+  const orig = document.getElementById('preview');
+  const modalCanvas = document.getElementById('preview-modal-canvas');
+  if (orig && modalCanvas) {
+    modalCanvas.width = orig.width;
+    modalCanvas.height = orig.height;
+    const ctx = modalCanvas.getContext('2d');
+    ctx.clearRect(0, 0, modalCanvas.width, modalCanvas.height);
+    ctx.drawImage(orig, 0, 0);
+  }
+  updateLiveOverlay();
 }
 
 let finalToken = 0;
@@ -1625,6 +1690,26 @@ const actions = {
     S.liveBlobs = [];
     clearImgCache();
     S.room.setState({ phase: 'frame', picks: [] });
+  },
+  'expand-preview': () => {
+    S.previewExpanded = true;
+    const modal = document.getElementById('preview-modal');
+    if (modal) {
+      modal.classList.add('open');
+      syncModalPreview();
+    } else {
+      render();
+      setTimeout(syncModalPreview, 50);
+    }
+  },
+  'close-preview': () => {
+    S.previewExpanded = false;
+    const modal = document.getElementById('preview-modal');
+    if (modal) {
+      modal.classList.remove('open');
+    } else {
+      render();
+    }
   },
 };
 
