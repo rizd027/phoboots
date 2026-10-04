@@ -601,11 +601,15 @@ function renderFrameThumbnails() {
   if (!canvases.length) return;
   const layout = st().layout || '4cut';
   canvases.forEach((canvas) => {
-    const fid = canvas.dataset.frameId;
-    if (canvas.dataset.renderedLayout === layout && canvas.dataset.renderedFrame === fid) return;
-    canvas.dataset.renderedLayout = layout;
-    canvas.dataset.renderedFrame = fid;
-    renderFramePreview(canvas, fid, layout, 130);
+    try {
+      const fid = canvas.dataset.frameId;
+      if (canvas.dataset.renderedLayout === layout && canvas.dataset.renderedFrame === fid) return;
+      canvas.dataset.renderedLayout = layout;
+      canvas.dataset.renderedFrame = fid;
+      renderFramePreview(canvas, fid, layout, 130);
+    } catch (e) {
+      console.error('Thumbnail render error:', e);
+    }
   });
 }
 

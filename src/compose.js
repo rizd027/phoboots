@@ -1,5 +1,5 @@
 // Canvas compositor: builds the final photo strip from everyone's shots.
-import { LAYOUTS } from './config.js';
+import { LAYOUTS, slotsOf } from './config.js';
 
 const imgCache = new Map();
 
@@ -236,55 +236,60 @@ import { getFrame } from './frames.js';
  * identical to getangie.com photobooth gallery.
  */
 export function renderFramePreview(canvas, frameId, layoutId = '4cut', width = 160) {
-  const frame = getFrame(frameId);
-  const { width: W, height: H, cellW, cellH, L } = stripSize(layoutId);
-  const scale = width / W;
-  const targetH = Math.round(H * scale);
+  try {
+    const frame = getFrame(frameId);
+    const { width: W, height: H, cellW, cellH, L } = stripSize(layoutId);
+    const scale = width / W;
+    const targetH = Math.round(H * scale);
 
-  canvas.width = width;
-  canvas.height = targetH;
-  const ctx = canvas.getContext('2d');
-  ctx.save();
-  ctx.scale(scale, scale);
-
-  // Draw decorative background
-  frame.draw(ctx, W, H, L);
-
-  // Draw clean white photo boxes
-  const radius = Math.round(W * 0.015);
-  for (let i = 0; i < slotsOf(layoutId); i++) {
-    const col = i % L.cols;
-    const row = Math.floor(i / L.cols);
-    const x = L.pad + col * (cellW + L.gap);
-    const y = L.pad + row * (cellH + L.gap);
-
+    canvas.width = width;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
     ctx.save();
-    roundRect(ctx, x, y, cellW, cellH, radius);
-    ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetY = 3;
-    ctx.fill();
-    ctx.restore();
+    ctx.scale(scale, scale);
 
-    // subtle inner border
-    ctx.save();
-    roundRect(ctx, x, y, cellW, cellH, radius);
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    // Draw decorative background
+    frame.draw(ctx, W, H, L);
+
+    // Draw clean white photo boxes
+    const radius = Math.round(W * 0.015);
+    const slots = slotsOf(layoutId);
+    for (let i = 0; i < slots; i++) {
+      const col = i % L.cols;
+      const row = Math.floor(i / L.cols);
+      const x = L.pad + col * (cellW + L.gap);
+      const y = L.pad + row * (cellH + L.gap);
+
+      ctx.save();
+      roundRect(ctx, x, y, cellW, cellH, radius);
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.12)';
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 3;
+      ctx.fill();
+      ctx.restore();
+
+      // subtle inner border
+      ctx.save();
+      roundRect(ctx, x, y, cellW, cellH, radius);
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Footer mini logo
+    const gridBottom = L.pad + L.rows * cellH + (L.rows - 1) * L.gap;
+    ctx.fillStyle = frame.textColor || '#16161b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `800 ${Math.round(W * 0.052)}px Inter, sans-serif`;
+    ctx.fillText('phoboots', W / 2, gridBottom + L.footer * 0.48);
+
     ctx.restore();
+  } catch (e) {
+    console.error('Error rendering preview for frame', frameId, e);
   }
-
-  // Footer mini logo
-  const gridBottom = L.pad + L.rows * cellH + (L.rows - 1) * L.gap;
-  ctx.fillStyle = frame.textColor || '#16161b';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `800 ${Math.round(W * 0.052)}px Inter, sans-serif`;
-  ctx.fillText('phoboots', W / 2, gridBottom + L.footer * 0.48);
-
-  ctx.restore();
 }
 
 /**
