@@ -402,7 +402,7 @@ function phaseView(phase) {
     case 'shoot': {
       const total = S.shooting ? S.shots.length : shotsOf(s.layout);
       const timerSecs = s.timerSecs || 3;
-      const isPreset = [3, 5, 7, 10].includes(timerSecs);
+      const isPreset = [1, 3, 5, 7, 10].includes(timerSecs);
       return `
       <section class="phase-inner shoot">
         <div class="shoot-head">
@@ -421,13 +421,13 @@ function phaseView(phase) {
               <span>${t('timer')}</span>
             </span>
             <div class="timer-pills">
-              ${[3, 5, 7, 10].map((sec) => `
+              ${[1, 3, 5, 7, 10].map((sec) => `
                 <button class="timer-pill ${timerSecs === sec ? 'active' : ''}" data-action="set-timer" data-secs="${sec}" ${S.shooting ? 'disabled' : ''}>
                   ${sec}s
                 </button>
               `).join('')}
               <div class="timer-custom-wrap">
-                <input type="number" min="2" max="30" class="timer-custom-input ${!isPreset ? 'active' : ''}" id="timer-custom-input" value="${!isPreset ? timerSecs : ''}" placeholder="..." title="${t('timerCustom')} (2-30s)" ${S.shooting ? 'disabled' : ''} />
+                <input type="number" min="1" max="30" class="timer-custom-input ${!isPreset ? 'active' : ''}" id="timer-custom-input" value="${!isPreset ? timerSecs : ''}" placeholder="..." title="${t('timerCustom')} (1-30s)" ${S.shooting ? 'disabled' : ''} />
                 <span class="timer-sec-unit">s</span>
               </div>
             </div>
@@ -876,7 +876,7 @@ function updateShoot() {
     btn.querySelector('span').textContent = S.shooting ? t('shooting') : t('startShooting');
   }
   const timerSecs = st().timerSecs || 3;
-  const isPreset = [3, 5, 7, 10].includes(timerSecs);
+  const isPreset = [1, 3, 5, 7, 10].includes(timerSecs);
   document.querySelectorAll('.timer-pill').forEach((b) => {
     b.classList.toggle('active', parseInt(b.dataset.secs, 10) === timerSecs);
     b.disabled = S.shooting;
@@ -1255,7 +1255,7 @@ async function hostRunShoot() {
   const room = S.room;
   if (!room || S.shooting || st().phase !== 'shoot') return;
   const total = shotsOf(st().layout);
-  const secs = Math.max(2, Math.min(30, parseInt(st().timerSecs, 10) || 3));
+  const secs = Math.max(1, Math.min(30, parseInt(st().timerSecs, 10) || 3));
   const participants = getParticipants();
   S.participants = participants;
   room.send('shoot-start', { total, participants });
@@ -1566,7 +1566,7 @@ const actions = {
   },
   'set-timer': (el) => {
     if (S.shooting) return;
-    const secs = Math.max(2, Math.min(30, parseInt(el.dataset.secs, 10) || 3));
+    const secs = Math.max(1, Math.min(30, parseInt(el.dataset.secs, 10) || 3));
     S.room?.setState({ timerSecs: secs });
     document.querySelectorAll('.timer-pill').forEach((b) => {
       b.classList.toggle('active', parseInt(b.dataset.secs, 10) === secs);
@@ -1649,7 +1649,7 @@ app.addEventListener('input', (e) => {
     pushColor(el.value);
   } else if (el.id === 'timer-custom-input') {
     const val = parseInt(el.value, 10);
-    if (!isNaN(val) && val >= 2 && val <= 30) {
+    if (!isNaN(val) && val >= 1 && val <= 30) {
       S.room?.setState({ timerSecs: val });
       document.querySelectorAll('.timer-pill').forEach((b) => b.classList.remove('active'));
       el.classList.add('active');
@@ -1667,7 +1667,7 @@ app.addEventListener('change', (e) => {
     S.room?.setState({ showDate: e.target.checked });
   } else if (e.target.id === 'timer-custom-input') {
     let val = parseInt(e.target.value, 10);
-    if (isNaN(val) || val < 2) val = 3;
+    if (isNaN(val) || val < 1) val = 3;
     if (val > 30) val = 30;
     e.target.value = val;
     S.room?.setState({ timerSecs: val });
