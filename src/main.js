@@ -1900,14 +1900,9 @@ window.addEventListener('beforeunload', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     if (['lobby', 'session'].includes(S.view)) acquireWakeLock();
-    if (S.room && !S.room.closed) {
-      if (S.room.isHost) {
-        if (!S.room.peer || S.room.peer.disconnected || S.room.peer.destroyed) {
-          console.log('[room] Mobile tab woke up, recovering host room...');
-          S.room._recoverHost();
-        }
-      } else if (S.room.peer && S.room.peer.disconnected && !S.room.peer.destroyed) {
-        console.log('[room] Mobile tab woke up, reconnecting guest peer...');
+    if (S.room && !S.room.closed && S.room.peer) {
+      if (S.room.peer.disconnected && !S.room.peer.destroyed) {
+        console.log('[room] Mobile tab woke up, reconnecting peer...');
         try { S.room.peer.reconnect(); } catch {}
       }
     }

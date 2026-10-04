@@ -97,11 +97,8 @@ export class Room {
         peer.on('error', (e) => this._onPeerError(e));
         peer.on('disconnected', () => {
           if (!peer.destroyed && !this.closed) {
-            if (this.isHost) {
-              this._recoverHost();
-            } else {
-              try { peer.reconnect(); } catch {}
-            }
+            console.log('[room] Peer disconnected from broker, attempting reconnect...');
+            try { peer.reconnect(); } catch {}
           }
         });
         resolve(peer);
@@ -109,76 +106,19 @@ export class Room {
     });
   }
 
-  async _recoverHost() {
-    if (this.closed || !this.isHost || this._recovering) return;
-    this._recovering = true;
-    this.emit('status', 'reconnecting');
-    console.log('[room] Cellular connection drop detected, recovering host room:', this.code);
-
-    try {
-      if (this.peer && !this.peer.destroyed) {
-        try {
-          this.peer.reconnect();
-          await new Promise((res, rej) => {
-            const onOpen = () => { cleanup(); res(); };
-            const onErr = (e) => { cleanup(); rej(e); };
-            const cleanup = () => {
-              this.peer?.off('open', onOpen);
-              this.peer?.off('error', onErr);
-            };
-            this.peer.once('open', onOpen);
-            this.peer.once('error', onErr);
-            setTimeout(() => { cleanup(); rej(new Error('timeout')); }, 3000);
-          });
-          this._recovering = false;
-          this.emit('status', 'ready');
-          console.log('[room] Host reconnected successfully via reconnect()');
-          return;
-        } catch (err) {
-          console.warn('[room] Quick reconnect failed, re-opening clean peer:', err);
-        }
-      }
-
-      try { this.peer?.destroy(); } catch {}
-      // Give broker 1.5s to clear previous socket session so ID-TAKEN is avoided
-      await new Promise((r) => setTimeout(r, 1500));
-      if (this.closed) return;
-
-      await this._open(PREFIX + this.code);
-      this.myId = this.peer.id;
-      this.peer.on('connection', (conn) => this._onGuestConn(conn));
-      this.peer.on('call', (call) => this._answer(call));
-      this.emit('status', 'ready');
-      console.log('[room] Host room re-opened successfully with ID:', PREFIX + this.code);
-    } catch (e) {
-      console.error('[room] Host recovery error:', e);
-      if (!this.closed) {
-        setTimeout(() => {
-          this._recovering = false;
-          this._recoverHost();
-        }, 2000);
-        return;
-      }
-    }
-    this._recovering = false;
-  }
-
   _startHeartbeat() {
     this._stopHeartbeat();
     this._hbTimer = setInterval(() => {
       if (this.closed) return;
       if (this.isHost) {
-        // Keep cellular baseband radio active and prevent CGNAT timeout
-        try {
-          fetch('https://0.peerjs.com/', { mode: 'no-cors', cache: 'no-store' }).catch(() => {});
-        } catch {}
-        if (!this.peer || this.peer.disconnected || this.peer.destroyed || !this.peer.socket?._socket || this.peer.socket._socket.readyState !== 1) {
-          this._recoverHost();
+        if (this.peer && this.peer.disconnected && !this.peer.destroyed) {
+          console.log('[room] Host disconnected in lobby, reconnecting...');
+          try { this.peer.reconnect(); } catch {}
         } else if (this.conns.size > 0) {
           this._broadcast({ type: 'hb' });
         }
       }
-    }, 3000);
+    }, 4000);
   }
 
   _stopHeartbeat() {
@@ -341,8 +281,9 @@ export class Room {
       if (this._pendingJoinFail) this._pendingJoinFail('notfound');
       return; // a member we tried to call is gone — ignore
     }
-    if (this.isHost && !this.closed && ['network', 'server-error', 'socket-error', 'socket-closed', 'disconnected'].includes(e.type)) {
-      this._recoverHost();
+    if (this.isHost && !this.closed && this.peer && this.peer.disconnected && !this.peer.destroyed) {
+      console.log('[room] Host network event, attempting reconnect...');
+      try { this.peer.reconnect(); } catch {}
       return;
     }
     if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type)) {
