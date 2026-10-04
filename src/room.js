@@ -12,27 +12,6 @@ const PREFIX = 'phoboots-v1-';
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O to avoid confusion
 const BUSY_PHASES = ['shoot', 'pick', 'style', 'done'];
 
-export const ICE_SERVERS = [
-  // High-availability Google STUN servers (IPv4 + IPv6 Anycast)
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
-  { urls: 'stun:stun3.l.google.com:19302' },
-  { urls: 'stun:stun4.l.google.com:19302' },
-  // Cloudflare STUN (low latency edge)
-  { urls: 'stun:stun.cloudflare.com:3478' },
-  // Twilio Global STUN
-  { urls: 'stun:global.stun.twilio.com:3478' }
-];
-
-export const PEER_OPTIONS = {
-  debug: 1,
-  config: {
-    iceServers: ICE_SERVERS,
-    sdpSemantics: 'unified-plan'
-  }
-};
-
 export function generateCode(len = 5) {
   let s = '';
   const arr = crypto.getRandomValues(new Uint32Array(len));
@@ -78,7 +57,7 @@ export class Room {
 
   _open(id) {
     return new Promise((resolve, reject) => {
-      const peer = id ? new Peer(id, PEER_OPTIONS) : new Peer(PEER_OPTIONS);
+      const peer = id ? new Peer(id, { debug: 1 }) : new Peer({ debug: 1 });
       const onErr = (e) => {
         peer.destroy();
         reject(e);
@@ -89,7 +68,11 @@ export class Room {
         this.peer = peer;
         peer.on('error', (e) => this._onPeerError(e));
         peer.on('disconnected', () => {
-          if (!peer.destroyed && !this.closed) peer.reconnect();
+          if (!peer.destroyed && !this.closed) {
+            try {
+              peer.reconnect();
+            } catch {}
+          }
         });
         resolve(peer);
       });
@@ -134,95 +117,49 @@ export class Room {
     this.myId = this.peer.id;
     this.peer.on('call', (call) => this._answer(call));
 
-    const MAX_RETRIES = 3;
-    let attempt = 0;
-
     return new Promise((resolve, reject) => {
       let settled = false;
-      let activeConn = null;
-      let retryTimer = null;
+      let isPeerUnavailable = false;
 
       const fail = (reason) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        clearTimeout(retryTimer);
         this._pendingJoinFail = null;
         this.leave();
         reject(new Error(reason));
       };
-      const timer = setTimeout(() => fail('notfound'), 25000);
-
-      const tryConnect = () => {
-        if (settled || this.closed) return;
-        attempt++;
-
-        if (activeConn) {
-          try {
-            activeConn.close();
-          } catch {}
-          activeConn = null;
-        }
-
-        this._pendingJoinFail = (reason) => {
-          if (reason === 'notfound' && attempt < MAX_RETRIES && !settled && !this.closed) {
-            console.log(`[join] Host peer not found on attempt ${attempt}, retrying in 1.5s...`);
-            retryTimer = setTimeout(tryConnect, 1500);
-          } else {
-            fail(reason);
-          }
-        };
-
-        const conn = this.peer.connect(PREFIX + code, { reliable: true });
-        activeConn = conn;
-
-        conn.on('open', () => {
-          console.log('[join] Connected to host, sending hello');
-          conn.send({ type: 'hello', name: this.name });
-        });
-
-        conn.on('data', (msg) => {
-          if (!settled) {
-            if (msg.type === 'welcome') {
-              settled = true;
-              clearTimeout(timer);
-              clearTimeout(retryTimer);
-              this._pendingJoinFail = null;
-              this.code = code;
-              this.hostConn = conn;
-              this.state = msg.state;
-              this._setMembers(msg.members);
-              resolve();
-            } else if (msg.type === 'reject') {
-              fail(msg.reason);
-            }
-            return;
-          }
-          this._onHostMsg(msg);
-        });
-
-        conn.on('close', () => {
-          if (settled && !this.closed) {
-            this.emit('host-left');
-          } else if (!settled && attempt < MAX_RETRIES && !this.closed) {
-            console.log(`[join] Connection closed on attempt ${attempt}, retrying in 1.5s...`);
-            retryTimer = setTimeout(tryConnect, 1500);
-          } else if (!settled) {
-            fail('notfound');
-          }
-        });
-
-        conn.on('error', (err) => {
-          console.warn('[join conn err]', err);
-          if (!settled && attempt < MAX_RETRIES && !this.closed) {
-            retryTimer = setTimeout(tryConnect, 1500);
-          } else if (!settled) {
-            fail('net');
-          }
-        });
+      const timer = setTimeout(() => fail('notfound'), 20000);
+      this._pendingJoinFail = (reason) => {
+        if (reason === 'notfound') isPeerUnavailable = true;
+        fail(reason);
       };
 
-      tryConnect();
+      const conn = this.peer.connect(PREFIX + code, { reliable: true });
+      conn.on('open', () => conn.send({ type: 'hello', name: this.name }));
+      conn.on('data', (msg) => {
+        if (!settled) {
+          if (msg.type === 'welcome') {
+            settled = true;
+            clearTimeout(timer);
+            this._pendingJoinFail = null;
+            this.code = code;
+            this.hostConn = conn;
+            this.state = msg.state;
+            this._setMembers(msg.members);
+            resolve();
+          } else if (msg.type === 'reject') {
+            fail(msg.reason);
+          }
+          return;
+        }
+        this._onHostMsg(msg);
+      });
+      conn.on('close', () => {
+        if (settled && !this.closed) this.emit('host-left');
+        else if (!settled) fail(isPeerUnavailable ? 'notfound' : 'net');
+      });
+      conn.on('error', () => fail('net'));
     });
   }
 
