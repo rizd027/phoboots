@@ -12,6 +12,41 @@ const PREFIX = 'phoboots-v1-';
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O to avoid confusion
 const BUSY_PHASES = ['shoot', 'pick', 'style', 'done'];
 
+export const ICE_SERVERS = [
+  // Fast & reliable Google STUN servers (IPv4 + IPv6)
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  // Cloudflare STUN (global edge)
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  // OpenRelay Public STUN & TURN servers (Metered.ca)
+  // Essential for cross-network connectivity, mobile data 4G/5G, and Symmetric NAT / CGNAT traversal
+  { urls: 'stun:openrelay.metered.ca:80' },
+  {
+    urls: 'turn:openrelay.metered.ca:80',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  },
+  {
+    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+    username: 'openrelayproject',
+    credential: 'openrelayproject'
+  }
+];
+
+export const PEER_OPTIONS = {
+  debug: 1,
+  config: {
+    iceServers: ICE_SERVERS,
+    sdpSemantics: 'unified-plan'
+  }
+};
+
 export function generateCode(len = 5) {
   let s = '';
   const arr = crypto.getRandomValues(new Uint32Array(len));
@@ -57,7 +92,7 @@ export class Room {
 
   _open(id) {
     return new Promise((resolve, reject) => {
-      const peer = id ? new Peer(id, { debug: 1 }) : new Peer({ debug: 1 });
+      const peer = id ? new Peer(id, PEER_OPTIONS) : new Peer(PEER_OPTIONS);
       const onErr = (e) => {
         peer.destroy();
         reject(e);
@@ -123,7 +158,7 @@ export class Room {
         this.leave();
         reject(new Error(reason));
       };
-      const timer = setTimeout(() => fail('notfound'), 15000);
+      const timer = setTimeout(() => fail('notfound'), 25000);
       this._pendingJoinFail = fail;
 
       const conn = this.peer.connect(PREFIX + code, { reliable: true });

@@ -3508,9 +3508,10 @@ body.flash-standby .stage-wrap .stage {
   }
   .lobby-actions .btn {
     width: 100%;
-    height: 40px;
-    font-size: 14px;
-    padding: 8px 16px;
+    height: 46px;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 10px 18px;
     justify-content: center;
   }
   .lobby-actions .btn-leave-box {
@@ -3637,9 +3638,10 @@ body.flash-standby .stage-wrap .stage {
   .frame-picker-view #btn-next {
     position: static;
     margin: 2px auto 0;
-    width: min(240px, calc(100% - 24px));
-    height: 38px;
-    font-size: 12px;
+    width: min(260px, calc(100% - 24px));
+    height: 44px;
+    font-size: 13.5px;
+    font-weight: 700;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   }
 
@@ -3768,11 +3770,18 @@ body.flash-standby .stage-wrap .stage {
   }
   #btn-shoot {
     width: 100%;
-    max-width: 280px;
-    height: 40px;
-    font-size: 13.5px;
+    max-width: 320px;
+    height: 48px;
+    font-size: 15px;
     font-weight: 700;
-    margin-top: 0;
+    margin-top: 2px;
+    gap: 9px;
+    border-radius: 999px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
+  }
+  #btn-shoot svg {
+    width: 19px;
+    height: 19px;
   }
   .thumbs {
     flex-wrap: nowrap;
