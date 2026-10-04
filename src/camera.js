@@ -21,7 +21,7 @@ export function stopStream(stream) {
 }
 
 /** Grab a mirrored (selfie-style) JPEG from a playing <video>. */
-export function captureFrame(videoEl, maxW = 640, quality = 0.8) {
+export function captureFrame(videoEl, maxW = 480, quality = 0.72) {
   const vw = videoEl?.videoWidth || 640;
   const vh = videoEl?.videoHeight || 480;
   const scale = Math.min(1, maxW / vw);
@@ -34,7 +34,7 @@ export function captureFrame(videoEl, maxW = 640, quality = 0.8) {
   ctx.translate(w, 0);
   ctx.scale(-1, 1);
   try {
-    if (videoEl && videoEl.readyState >= 2) {
+    if (videoEl && (videoEl.readyState >= 1 || videoEl.videoWidth > 0 || videoEl.currentTime > 0)) {
       ctx.drawImage(videoEl, 0, 0, w, h);
     } else {
       ctx.fillStyle = '#222';

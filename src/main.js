@@ -676,7 +676,7 @@ function ensureVideo(id, stream, local = false) {
     v.autoplay = true;
     v.playsInline = true;
     v.setAttribute('playsinline', '');
-    if (local) v.muted = true;
+    v.muted = true; // Always muted so autoplay policy never blocks video decoding
     videos.set(id, v);
   }
   if (v.srcObject !== stream) v.srcObject = stream;
@@ -779,23 +779,58 @@ function updatePhase() {
 }
 
 function getParticipants() {
-  if (S.room && S.room.members && S.room.members.length > 0) {
-    return S.room.members.map((m) => ({ id: m.id, name: m.name }));
-  }
+  const partMap = new Map();
+  // 1. Snapshot recorded at shoot-start
   if (S.participants && S.participants.length > 0) {
-    return S.participants;
+    S.participants.forEach((p) => {
+      if (p?.id) partMap.set(p.id, { id: p.id, name: p.name || 'Friend' });
+    });
   }
-  return [{ id: S.room?.myId || 'me', name: S.name || 'You' }];
+  // 2. Active room members
+  if (S.room && S.room.members && S.room.members.length > 0) {
+    S.room.members.forEach((m) => {
+      if (m?.id && !partMap.has(m.id)) {
+        partMap.set(m.id, { id: m.id, name: m.name || 'Friend' });
+      }
+    });
+  }
+  // 3. Any participant who contributed a photo in any shot
+  if (S.shots && S.shots.length > 0) {
+    S.shots.forEach((shot) => {
+      if (shot && typeof shot === 'object') {
+        Object.keys(shot).forEach((k) => {
+          if (k && !partMap.has(k)) {
+            partMap.set(k, { id: k, name: 'Friend' });
+          }
+        });
+      }
+    });
+  }
+  // 4. Fallback to self
+  if (!partMap.has(S.room?.myId || 'me')) {
+    partMap.set(S.room?.myId || 'me', { id: S.room?.myId || 'me', name: S.name || 'You' });
+  }
+  return Array.from(partMap.values());
 }
 
 const shotPhotos = (i) => {
   const parts = getParticipants();
   return parts.map((p) => {
     let src = S.shots[i]?.[p.id] || null;
+    // Cross-shot fallback if someone's frame was missing in this specific shot
+    if (!src) {
+      for (let k = 0; k < S.shots.length; k++) {
+        if (S.shots[k]?.[p.id]) {
+          src = S.shots[k][p.id];
+          break;
+        }
+      }
+    }
+    // Live video stream fallback
     if (!src && p.id && videos.has(p.id)) {
       const v = videos.get(p.id);
-      if (v && v.readyState >= 2) {
-        src = captureFrame(v, 640, 0.78);
+      if (v) {
+        src = captureFrame(v, 480, 0.72);
         if (!S.shots[i]) S.shots[i] = {};
         S.shots[i][p.id] = src;
       }
@@ -806,7 +841,7 @@ const shotPhotos = (i) => {
 
 const shotReady = (i) => {
   const parts = getParticipants();
-  return parts.length > 0 && parts.every((p) => p.id in (S.shots[i] || {}));
+  return parts.length > 0 && parts.every((p) => S.shots[i]?.[p.id]);
 };
 
 function updateShoot() {
@@ -849,9 +884,14 @@ function updatePick() {
   document.querySelectorAll('.pick-item').forEach((btn) => {
     const i = +btn.dataset.i;
     const c = btn.querySelector('canvas');
-    if (!c.dataset.done) {
-      c.dataset.done = '1';
-      renderShotThumb(c, shotPhotos(i), s.filter, ratio, 420);
+    if (c) {
+      const photos = shotPhotos(i);
+      const readyCount = photos.filter((p) => p.src).length;
+      const key = `${s.filter}_${readyCount}_${photos.length}_${s.layout}`;
+      if (c.dataset.renderedKey !== key) {
+        c.dataset.renderedKey = key;
+        renderShotThumb(c, photos, s.filter, ratio, 420);
+      }
     }
     const order = s.picks.indexOf(i);
     btn.classList.toggle('selected', order >= 0);
@@ -1164,7 +1204,17 @@ function onEvent(ev, data, from) {
   } else if (ev === 'photo') {
     if (!S.shots[data.i]) S.shots[data.i] = {};
     S.shots[data.i][from] = data.src;
-    if (st().phase === 'shoot') updateShoot();
+    clearImgCache();
+    if (st().phase === 'shoot') {
+      updateShoot();
+    } else if (st().phase === 'pick') {
+      updatePick();
+      drawPreview();
+    } else if (st().phase === 'style') {
+      drawPreview();
+    } else if (st().phase === 'done') {
+      drawFinal();
+    }
   } else if (ev === 'request-shoot' && S.room.isHost) {
     hostRunShoot();
   }
@@ -1186,6 +1236,22 @@ async function hostRunShoot() {
   const t0 = Date.now();
   while (Date.now() - t0 < 6000 && !S.shots.every((_, i) => shotReady(i))) await sleep(200);
   if (room.closed || st().phase !== 'shoot') return;
+
+  // Final check: guarantee every participant in every shot has a frame captured
+  const parts = getParticipants();
+  for (let sIdx = 0; sIdx < total; sIdx++) {
+    if (!S.shots[sIdx]) S.shots[sIdx] = {};
+    parts.forEach((p) => {
+      if (!S.shots[sIdx][p.id]) {
+        const pVid = videos.get(p.id);
+        if (pVid) {
+          const cap = captureFrame(pVid, 480, 0.72);
+          if (cap) S.shots[sIdx][p.id] = cap;
+        }
+      }
+    });
+  }
+
   const slots = slotsOf(st().layout);
   room.setState({ phase: 'pick', picks: Array.from({ length: slots }, (_, k) => k) });
 }
@@ -1214,7 +1280,7 @@ async function runCountdown({ i, secs }) {
   if (!S.room || S.room.closed) return;
 
   const myVid = videos.get(S.room.myId);
-  const src = captureFrame(myVid, 640, 0.78);
+  const src = captureFrame(myVid, 480, 0.72);
   shutter();
   const fl = document.getElementById('flash');
   if (fl) {
@@ -1227,16 +1293,16 @@ async function runCountdown({ i, secs }) {
   S.shots[i][S.room.myId] = src;
 
   // Immediately capture any connected peer video stream as reliable instant fallback
-  if (S.room.members) {
-    S.room.members.forEach((m) => {
-      if (m.id !== S.room.myId && !S.shots[i][m.id]) {
-        const peerVid = videos.get(m.id);
-        if (peerVid && peerVid.readyState >= 2) {
-          S.shots[i][m.id] = captureFrame(peerVid, 640, 0.78);
-        }
+  const curParts = getParticipants();
+  curParts.forEach((p) => {
+    if (p.id !== S.room.myId && !S.shots[i][p.id]) {
+      const peerVid = videos.get(p.id);
+      if (peerVid) {
+        const peerSrc = captureFrame(peerVid, 480, 0.72);
+        if (peerSrc) S.shots[i][p.id] = peerSrc;
       }
-    });
-  }
+    }
+  });
 
   S.room.send('photo', { i, src });
 
@@ -1245,7 +1311,10 @@ async function runCountdown({ i, secs }) {
       if (res && res.url) {
         S.liveClips[i] = res.url;
         S.liveBlobs[i] = res.blob;
-        S.liveMode = true;
+        // Keep liveMode off by default in multi-person sessions so combined preview is never obscured
+        if (S.room?.solo) {
+          S.liveMode = true;
+        }
       }
     });
   }

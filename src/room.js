@@ -203,7 +203,7 @@ export class Room {
       }
     });
     conn.on('close', () => this._removeMember(conn.peer));
-    conn.on('error', () => this._removeMember(conn.peer));
+    conn.on('error', (err) => console.warn('[guest conn err]', conn.peer, err));
   }
 
   _reject(conn, reason) {
