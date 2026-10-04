@@ -194,7 +194,7 @@ function homeView() {
         <div class="glow g1"></div><div class="glow g2"></div>
         <div class="hanger">
           <div class="hanger-bar"></div>
-          <img class="hang-strip" src="/hero-strip.jpg" alt="Example photobooth strip" width="424" height="632" />
+          <img class="hang-strip" src="/hero-strip.jpg" alt="Example photobooth strip" width="424" height="632" fetchpriority="high" decoding="async" />
         </div>
         <div class="float-card fc1">${ic.pin}<b>Jakarta</b><span>Indonesia</span></div>
         <div class="float-card fc2">${ic.pin}<b>Seoul</b><span>Korea</span></div>
